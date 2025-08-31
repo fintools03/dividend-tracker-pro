@@ -1,2 +1,0 @@
-# Database Configuration (Railway will provide DATABASE_URL automatically)
-DATABASE_URL=postgresql://username:password@host:port/
