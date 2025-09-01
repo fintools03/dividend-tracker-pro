@@ -136,7 +136,7 @@ class DatabaseManager:
                 )
             """)
             
-            # Portfolios table
+            # Portfolios table with proper unique constraint - FIXED
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS portfolios (
                     id SERIAL PRIMARY KEY,
@@ -144,7 +144,8 @@ class DatabaseManager:
                     symbol VARCHAR(20) NOT NULL,
                     shares DECIMAL(10,4) NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, symbol)
                 )
             """)
             
@@ -168,6 +169,8 @@ class DatabaseManager:
             cursor.close()
         except Exception as e:
             st.error(f"Error creating tables: {e}")
+            if self.connection:
+                self.connection.rollback()
     
     def get_user(self, username):
         """Get user by username"""
@@ -214,13 +217,13 @@ class DatabaseManager:
         
         try:
             cursor = self.connection.cursor()
-            # Update if exists, insert if not
+            # Update if exists, insert if not - FIXED with proper UPSERT
             cursor.execute("""
                 INSERT INTO portfolios (user_id, symbol, shares, updated_at) 
                 VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
                 ON CONFLICT (user_id, symbol) 
-                DO UPDATE SET shares = %s, updated_at = CURRENT_TIMESTAMP
-            """, (user_id, symbol, shares, shares))
+                DO UPDATE SET shares = EXCLUDED.shares, updated_at = CURRENT_TIMESTAMP
+            """, (user_id, symbol, shares))
             
             self.connection.commit()
             cursor.close()
@@ -267,95 +270,118 @@ class DatabaseManager:
 
 class DataProvider:
     def __init__(self):
-        self.alpha_vantage_key = "0ZL6RBY7H5GO7IH9"
-        self.polygon_key = "ERsXTaR8Ltc3E1yR1P4RukMzHsP212NO"
+        # FIXED: Use environment variables for API keys
+        self.alpha_vantage_key = config('ALPHA_VANTAGE_API_KEY', default="0ZL6RBY7H5GO7IH9")
+        self.polygon_key = config('POLYGON_API_KEY', default="ERsXTaR8Ltc3E1yR1P4RukMzHsP212NO")
         self.currency_rates = {}
+        self.api_call_count = 0
+        self.last_api_call = 0
         
+    def rate_limit_check(self, min_interval=12):
+        """Ensure minimum interval between API calls to avoid rate limits"""
+        current_time = time.time()
+        time_since_last = current_time - self.last_api_call
+        
+        if time_since_last < min_interval:
+            sleep_time = min_interval - time_since_last
+            time.sleep(sleep_time)
+        
+        self.last_api_call = time.time()
+        self.api_call_count += 1
+    
     def get_currency_rates(self):
-        """Get current exchange rates"""
+        """Get current exchange rates with fallback"""
         try:
-            response = requests.get("https://api.exchangerate-api.com/v4/latest/USD", timeout=10)
+            response = requests.get(
+                "https://api.exchangerate-api.com/v4/latest/USD", 
+                timeout=10
+            )
             if response.status_code == 200:
                 data = response.json()
                 self.currency_rates = data['rates']
                 return True
-        except:
-            pass
+        except requests.RequestException as e:
+            st.warning(f"Currency API unavailable, using approximate rates")
         
-        # Fallback rates
+        # Fallback rates (approximate)
         self.currency_rates = {
             'EUR': 0.85, 'GBP': 0.73, 'CHF': 0.88, 'SEK': 10.5, 
-            'NOK': 10.8, 'DKK': 6.4, 'PLN': 4.0, 'CZK': 22.0
+            'NOK': 10.8, 'DKK': 6.4, 'PLN': 4.0, 'CZK': 22.0,
+            'CAD': 1.25, 'AUD': 1.35, 'JPY': 110.0, 'CNY': 6.45
         }
         return False
     
     def get_stock_data(self, symbol):
-        """Get stock data with fallback chain"""
+        """Get stock data with intelligent fallback and rate limiting"""
+        # Check if we've made too many API calls
+        if self.api_call_count > 50:  # Conservative limit
+            st.warning("API rate limit approached, using yfinance for reliability")
+            return self.get_yfinance_data(symbol)
         
-        # Try Alpha Vantage first
+        # Rate limit protection for API calls
+        self.rate_limit_check()
+        
+        # Try yfinance first (most reliable, no rate limits)
+        try:
+            data = self.get_yfinance_data(symbol)
+            if data and data.get('current_price', 0) > 0:
+                return data
+        except Exception as e:
+            st.warning(f"yfinance failed for {symbol}: {str(e)}")
+        
+        # Try Alpha Vantage as backup
         try:
             data = self.get_alpha_vantage_data(symbol)
-            if data:
+            if data and data.get('current_price', 0) > 0:
                 return data
         except Exception as e:
-            st.warning(f"Alpha Vantage failed for {symbol}: {str(e)}")
+            st.warning(f"Alpha Vantage failed for {symbol}: Limited API calls")
         
-        # Try Polygon as backup
+        # Try Polygon as last resort
         try:
             data = self.get_polygon_data(symbol)
-            if data:
+            if data and data.get('current_price', 0) > 0:
                 return data
         except Exception as e:
-            st.warning(f"Polygon failed for {symbol}: {str(e)}")
+            st.warning(f"All data sources failed for {symbol}")
         
-        # Fall back to yfinance
-        try:
-            return self.get_yfinance_data(symbol)
-        except Exception as e:
-            st.error(f"All data sources failed for {symbol}: {str(e)}")
-            return None
+        return None
     
     def get_alpha_vantage_data(self, symbol):
-        """Get data from Alpha Vantage"""
+        """Get data from Alpha Vantage with improved error handling"""
         try:
             ts = TimeSeries(key=self.alpha_vantage_key, output_format='pandas')
-            data, meta_data = ts.get_daily(symbol=symbol)
+            data, meta_data = ts.get_daily(symbol=symbol, outputsize='compact')
             
             if data.empty:
                 return None
             
-            # Get basic info
-            current_price = data.iloc[0]['4. close']
+            current_price = float(data.iloc[0]['4. close'])
             
-            # Try to get dividend data
-            url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={self.alpha_vantage_key}"
-            response = requests.get(url)
+            return {
+                'symbol': symbol,
+                'current_price': current_price,
+                'currency': 'USD',  # Alpha Vantage typically returns USD
+                'source': 'Alpha Vantage',
+                'last_updated': data.index[0].strftime('%Y-%m-%d')
+            }
             
-            if response.status_code == 200:
-                return {
-                    'symbol': symbol,
-                    'current_price': current_price,
-                    'currency': 'USD',  # Default, should be enhanced
-                    'source': 'Alpha Vantage'
-                }
         except Exception:
             return None
-        
-        return None
     
     def get_polygon_data(self, symbol):
-        """Get data from Polygon"""
+        """Get data from Polygon with improved error handling"""
         try:
             url = f"https://api.polygon.io/v2/aggs/ticker/{symbol}/prev?adjusted=true&apikey={self.polygon_key}"
-            response = requests.get(url)
+            response = requests.get(url, timeout=10)
             
             if response.status_code == 200:
                 data = response.json()
-                if data['resultsCount'] > 0:
+                if data.get('resultsCount', 0) > 0:
                     result = data['results'][0]
                     return {
                         'symbol': symbol,
-                        'current_price': result['c'],  # Close price
+                        'current_price': float(result['c']),  # Close price
                         'currency': 'USD',
                         'source': 'Polygon'
                     }
@@ -365,20 +391,44 @@ class DataProvider:
         return None
     
     def get_yfinance_data(self, symbol):
-        """Get data from yfinance (fallback)"""
+        """Get data from yfinance with enhanced error handling"""
         try:
             stock = yf.Ticker(symbol)
+            
+            # Get basic info with timeout protection
             info = stock.info
-            dividends = stock.dividends
+            
+            # Validate we got meaningful data
+            if not info or len(info) < 5:  # Basic validation
+                return None
+            
+            # Get current price with multiple fallbacks
+            current_price = (
+                info.get('currentPrice') or 
+                info.get('regularMarketPrice') or 
+                info.get('previousClose') or 
+                0
+            )
+            
+            if current_price == 0:
+                return None
+            
+            # Get dividends (recent 2 years) with error handling
+            try:
+                dividends = stock.dividends.tail(8)  # Last 8 dividend payments
+            except:
+                dividends = pd.Series()
             
             return {
                 'symbol': symbol,
-                'current_price': info.get('currentPrice', info.get('regularMarketPrice', 0)),
+                'current_price': float(current_price),
                 'currency': info.get('currency', 'USD'),
                 'dividends': dividends,
                 'info': info,
-                'source': 'yfinance'
+                'source': 'yfinance',
+                'company_name': info.get('longName', info.get('shortName', symbol))
             }
+            
         except Exception:
             return None
 
@@ -535,7 +585,7 @@ def main_app():
                     st.rerun()
     
     # Market examples
-    with st.sidebar.expander("📍 Market Examples"):
+    with st.sidebar.expander("🔍 Market Examples"):
         st.markdown("""
         **US Markets:** AAPL, MSFT, JNJ, PG  
         **UK (.L):** SHEL.L, BP.L, RIO.L  
@@ -580,7 +630,7 @@ def main_app():
                         result = {
                             'symbol': item['symbol'],
                             'shares': item['shares'],
-                            'company_name': stock_data.get('info', {}).get('longName', item['symbol']),
+                            'company_name': stock_data.get('company_name', stock_data.get('info', {}).get('longName', item['symbol'])),
                             'market': market,
                             'country': country,
                             'currency': currency,
