@@ -587,7 +587,7 @@ class ProfessionalDividendTracker:
         }
 
 # Initialize the tracker - FIXED for older Streamlit versions
-@st.cache(allow_output_mutation=True)
+@st.cache_resource
 def get_tracker():
     return ProfessionalDividendTracker()
 
@@ -1021,7 +1021,7 @@ def main_app():
     
     # Logout button in sidebar
     with st.sidebar:
-        if st.button("🚪 Logout"):
+        if st.button("Logout", key=f"logout_{st.session_state.user_id}"):
             for key in ['authenticated', 'user_id', 'username']:
                 if key in st.session_state:
                     del st.session_state[key]
@@ -1038,7 +1038,7 @@ def main_app():
     portfolio = tracker.db.get_portfolio(st.session_state.user_id)
     
     # Add stock form
-    with st.sidebar.form("add_stock_form"):
+    with st.sidebar.form(f"add_stock_form_{hash(st.session_state.user_id)}"):
         st.subheader("➕ Add Stock")
         
         symbol = st.text_input(
