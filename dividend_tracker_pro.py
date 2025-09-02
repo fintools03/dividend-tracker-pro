@@ -583,7 +583,7 @@ class ProfessionalDividendTracker:
             return f"{amount:.2f}p"  # Show as pence for UK stocks
         
         symbols = {
-            'USD': '
+            'USD': 
 
 # Initialize the tracker
 @st.cache_resource
