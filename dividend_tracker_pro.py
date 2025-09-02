@@ -583,10 +583,10 @@ class ProfessionalDividendTracker:
             return f"{amount:.2f}p"  # Show as pence for UK stocks
         
         symbols = {
-            'USD': 
+            'USD': '
 
-# Initialize the tracker
-@st.cache_resource
+# Initialize the tracker - FIXED for older Streamlit versions
+@st.cache(allow_output_mutation=True)
 def get_tracker():
     return ProfessionalDividendTracker()
 
@@ -845,7 +845,7 @@ def main_app():
                         for result in successful_results:
                             if result.get('position_value') and result.get('currency'):
                                 # Extract numeric value from formatted string
-                                value_str = str(result['position_value']).replace('$', '').replace('EUR', '').replace('GBP', '').replace('CHF', '').replace('SEK', '').replace('NOK', '').replace('DKK', '').replace(',', '').strip()
+                                value_str = str(result['position_value']).replace(', '').replace('€', '').replace('£', '').replace('C, '').replace('A, '').replace(',', '')
                                 try:
                                     value = float(value_str)
                                     currency = result['currency']
@@ -1226,7 +1226,7 @@ def main_app():
                         for result in successful_results:
                             if result.get('position_value') and result.get('currency'):
                                 # Extract numeric value from formatted string
-                                value_str = str(result['position_value']).replace('$', '').replace('EUR', '').replace('GBP', '').replace('CHF', '').replace('SEK', '').replace('NOK', '').replace('DKK', '').replace(',', '').strip()
+                                value_str = str(result['position_value']).replace(', '').replace('€', '').replace('£', '').replace('C, '').replace('A, '').replace(',', '')
                                 try:
                                     value = float(value_str)
                                     currency = result['currency']
