@@ -957,15 +957,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-            'EUR': 'EUR', 'GBP': 'GBP', 'CHF': 'CHF', 'SEK': 'SEK', 'NOK': 'NOK', 'DKK': 'DKK', 'CAD': 'CAD', 'AUD': 'AUD'
-        }
-        
-        symbol = symbols.get(currency, currency)
-        
-        if currency in ['EUR', 'GBP', 'CHF', 'SEK', 'NOK', 'DKK', 'CAD', 'AUD']:
-            return f"{symbol} {amount:.2f}"
-        else:
-            return f"{symbol}{amount:.2f}"
 
 # Initialize the tracker
 @st.cache_resource
