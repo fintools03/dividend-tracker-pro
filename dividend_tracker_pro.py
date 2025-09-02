@@ -956,8 +956,8 @@ def main():
         main_app()
 
 if __name__ == "__main__":
-    main(), 'EUR': 'EUR', 'GBP': 'GBP', 'CHF': 'CHF', 
-            'SEK': 'SEK', 'NOK': 'NOK', 'DKK': 'DKK', 'CAD': 'CAD', 'AUD': 'AUD'
+    main(), 
+            'EUR': 'EUR', 'GBP': 'GBP', 'CHF': 'CHF', 'SEK': 'SEK', 'NOK': 'NOK', 'DKK': 'DKK', 'CAD': 'CAD', 'AUD': 'AUD'
         }
         
         symbol = symbols.get(currency, currency)
