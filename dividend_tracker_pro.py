@@ -455,7 +455,7 @@ class DataProvider:
             return None
     
     def get_yfinance_data(self, symbol):
-        """Get data from yfinance - ENHANCED with dividend data"""
+        """Get data from yfinance - ENHANCED with comprehensive dividend data"""
         try:
             stock = yf.Ticker(symbol)
             
@@ -477,23 +477,67 @@ class DataProvider:
             if current_price == 0:
                 return None
             
-            # Get dividends (recent 2 years) with error handling
+            # ENHANCED DIVIDEND DATA COLLECTION
+            dividend_data = {}
+            
+            # Get dividend history (last 2 years)
             try:
-                dividends = stock.dividends.tail(8)  # Last 8 dividend payments
+                dividends = stock.dividends.tail(8)  # Last 8 payments
                 if not dividends.empty:
                     last_dividend = dividends.iloc[-1]
-                    dividend_info = f"Last: ${last_dividend:.3f}"
+                    dividend_data['last_dividend'] = float(last_dividend)
+                    dividend_data['last_dividend_date'] = dividends.index[-1].strftime('%Y-%m-%d')
+                    
+                    # Calculate annual dividend (sum of last 4 quarters or 1 year)
+                    recent_year_dividends = dividends.last('365D').sum()
+                    dividend_data['annual_dividend'] = float(recent_year_dividends)
+                    
+                    # Dividend frequency
+                    dividend_data['payment_count'] = len(dividends)
+                    
+                    # Dividend yield calculation
+                    if current_price > 0:
+                        dividend_data['yield_percent'] = (recent_year_dividends / current_price) * 100
                 else:
-                    dividend_info = "No recent dividends"
-            except:
-                dividends = pd.Series()
-                dividend_info = "Dividend data unavailable"
+                    dividend_data = {'status': 'No dividend history found'}
+            except Exception as e:
+                dividend_data = {'status': f'Dividend data error: {str(e)}'}
+            
+            # Get additional dividend info from company info
+            dividend_yield = info.get('dividendYield')
+            if dividend_yield:
+                dividend_data['company_reported_yield'] = dividend_yield * 100
+            
+            dividend_rate = info.get('dividendRate')
+            if dividend_rate:
+                dividend_data['company_reported_rate'] = dividend_rate
+            
+            ex_dividend_date = info.get('exDividendDate')
+            if ex_dividend_date:
+                dividend_data['ex_dividend_date'] = datetime.fromtimestamp(ex_dividend_date).strftime('%Y-%m-%d')
+            
+            # Format dividend info for display
+            if dividend_data.get('annual_dividend', 0) > 0:
+                annual_div = dividend_data['annual_dividend']
+                yield_pct = dividend_data.get('yield_percent', 0)
+                currency = info.get('currency', 'USD')
+                
+                if currency == 'GBP':
+                    dividend_info = f"Annual: {annual_div:.1f}p (Yield: {yield_pct:.2f}%)"
+                else:
+                    dividend_info = f"Annual: {currency} {annual_div:.2f} (Yield: {yield_pct:.2f}%)"
+                
+                if dividend_data.get('last_dividend_date'):
+                    dividend_info += f" | Last: {dividend_data['last_dividend_date']}"
+            else:
+                dividend_info = dividend_data.get('status', 'No recent dividends')
             
             return {
                 'symbol': symbol,
                 'current_price': float(current_price),
                 'currency': info.get('currency', 'USD'),
-                'dividends': dividends,
+                'dividends': dividends if 'dividends' in locals() else pd.Series(),
+                'dividend_data': dividend_data,
                 'dividend_info': dividend_info,
                 'info': info,
                 'source': 'yfinance 📊',
@@ -529,24 +573,17 @@ class ProfessionalDividendTracker:
         
         return 'US Market (NASDAQ/NYSE)', 'US', 'USD'
     
-    def format_currency(self, amount, currency, is_uk_price=False, is_uk_dividend=False):
-        """Format amount with appropriate currency symbol"""
+    def format_currency(self, amount, currency, is_uk_stock=False):
+        """Format amount with appropriate currency symbol - FIXED for UK pence"""
         if not isinstance(amount, (int, float)):
             return str(amount)
         
-        if currency == 'GBP' and is_uk_price:
-            return f"£{amount:.2f}"
-        
-        if currency == 'GBP' and is_uk_dividend:
-            return f"£{amount:.3f}"
+        # Handle UK stocks priced in pence
+        if currency == 'GBP' and is_uk_stock:
+            return f"{amount:.2f}p"  # Show as pence for UK stocks
         
         symbols = {
-            'USD': '$', 'EUR': '€', 'GBP': '£', 'CHF': 'CHF', 
-            'SEK': 'SEK', 'NOK': 'NOK', 'DKK': 'DKK', 'CAD': 'C$', 'AUD': 'A$'
-        }
-        
-        symbol = symbols.get(currency, currency)
-        return f"{symbol}{amount:.2f}"
+            'USD': '
 
 # Initialize the tracker
 @st.cache_resource
@@ -808,7 +845,388 @@ def main_app():
                         for result in successful_results:
                             if result.get('position_value') and result.get('currency'):
                                 # Extract numeric value from formatted string
-                                value_str = str(result['position_value']).replace('$', '').replace('EUR', '').replace('GBP', '').replace('CHF', '').replace('SEK', '').replace('NOK', '').replace('DKK', '').replace(',', '').strip()
+                                value_str = str(result['position_value']).replace(', '').replace('€', '').replace('£', '').replace('C, '').replace('A, '').replace(',', '')
+                                try:
+                                    value = float(value_str)
+                                    currency = result['currency']
+                                    
+                                    # Convert to USD
+                                    if currency == 'USD':
+                                        usd_value = value
+                                    else:
+                                        rate = tracker.data_provider.currency_rates.get(currency, 1)
+                                        usd_value = value / rate
+                                    
+                                    total_usd += usd_value
+                                    
+                                    # Track by currency
+                                    if currency not in currency_breakdown:
+                                        currency_breakdown[currency] = 0
+                                    currency_breakdown[currency] += value
+                                    
+                                except:
+                                    pass
+                        
+                        # Display totals
+                        st.subheader("💰 Portfolio Valuation")
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.metric("Total Value (USD)", f"${total_usd:,.2f}")
+                        
+                        with col2:
+                            if len(currency_breakdown) > 1:
+                                breakdown_text = " | ".join([f"{curr}: {tracker.format_currency(val, curr)}" for curr, val in currency_breakdown.items()])
+                                st.metric("Currency Breakdown", breakdown_text)
+                
+                if failed_results:
+                    st.subheader("⚠️ Stocks with Data Issues")
+                    for result in failed_results:
+                        st.warning(f"**{result['symbol']}** ({result['shares']} shares) - {result.get('data_source', 'Failed')}")
+                
+                # Show data source breakdown
+                st.subheader("📡 Data Source Performance")
+                source_counts = {}
+                for result in successful_results:
+                    source = result.get('data_source', 'Unknown')
+                    source_counts[source] = source_counts.get(source, 0) + 1
+                
+                if source_counts:
+                    for source, count in source_counts.items():
+                        st.info(f"**{source}**: Retrieved data for {count} stocks")
+            
+            # Export functionality - ENHANCED
+            st.subheader("📥 Export Portfolio")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                # Excel export with timestamp
+                buffer = io.BytesIO()
+                timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M')
+                
+                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                    # Portfolio sheet
+                    df_results = pd.DataFrame(results)
+                    df_results.to_excel(writer, index=False, sheet_name='Portfolio_Analysis')
+                    
+                    # Summary sheet
+                    summary_data = {
+                        'Total Stocks': [len(results)],
+                        'Successful Retrievals': [sum(1 for r in results if r.get('status') == '✅ Success')],
+                        'Analysis Date': [datetime.now().strftime('%Y-%m-%d %H:%M')],
+                        'User': [st.session_state.username]
+                    }
+                    pd.DataFrame(summary_data).to_excel(writer, index=False, sheet_name='Summary')
+                
+                st.download_button(
+                    label="📊 Download Excel Report",
+                    data=buffer.getvalue(),
+                    file_name=f"portfolio_analysis_{timestamp}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            
+            with col2:
+                # CSV export
+                csv = pd.DataFrame(results).to_csv(index=False)
+                st.download_button(
+                    label="📄 Download CSV",
+                    data=csv,
+                    file_name=f"portfolio_analysis_{timestamp}.csv",
+                    mime="text/csv"
+                )
+            
+            with col3:
+                # Clear results button
+                if st.button("🔄 Clear Results"):
+                    if 'analysis_results' in st.session_state:
+                        del st.session_state.analysis_results
+                    st.rerun()
+
+def main():
+    """Main application entry point"""
+    # Initialize authentication state
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    
+    # Show login or main app
+    if not st.session_state.authenticated:
+        login_page()
+    else:
+        main_app()
+
+if __name__ == "__main__":
+    main(), 'EUR': 'EUR', 'GBP': 'GBP', 'CHF': 'CHF', 
+            'SEK': 'SEK', 'NOK': 'NOK', 'DKK': 'DKK', 'CAD': 'CAD', 'AUD': 'AUD'
+        }
+        
+        symbol = symbols.get(currency, currency)
+        
+        if currency in ['EUR', 'GBP', 'CHF', 'SEK', 'NOK', 'DKK', 'CAD', 'AUD']:
+            return f"{symbol} {amount:.2f}"
+        else:
+            return f"{symbol}{amount:.2f}"
+
+# Initialize the tracker
+@st.cache_resource
+def get_tracker():
+    return ProfessionalDividendTracker()
+
+tracker = get_tracker()
+
+def login_page():
+    """Display login page"""
+    st.markdown("<div class='login-container'>", unsafe_allow_html=True)
+    
+    st.title("🔐 Login")
+    
+    tab1, tab2 = st.tabs(["Login", "Sign Up"])
+    
+    with tab1:
+        with st.form("login_form"):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submit = st.form_submit_button("Login")
+            
+            if submit and username and password:
+                user = tracker.db.get_user(username)
+                if user and tracker.db.verify_password(password, user['password_hash']):
+                    st.session_state.authenticated = True
+                    st.session_state.user_id = user['id']
+                    st.session_state.username = user['username']
+                    st.success("✅ Login successful!")
+                    time.sleep(1)  # Brief pause to show success
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid username or password")
+    
+    with tab2:
+        with st.form("signup_form"):
+            new_username = st.text_input("Choose Username")
+            new_email = st.text_input("Email (optional)")
+            new_password = st.text_input("Choose Password", type="password")
+            confirm_password = st.text_input("Confirm Password", type="password")
+            signup = st.form_submit_button("Sign Up")
+            
+            if signup and new_username and new_password:
+                if new_password != confirm_password:
+                    st.error("❌ Passwords don't match")
+                elif len(new_password) < 6:
+                    st.error("❌ Password must be at least 6 characters")
+                elif tracker.db.get_user(new_username):
+                    st.error("❌ Username already exists")
+                else:
+                    if tracker.db.create_user(new_username, new_password, new_email):
+                        st.success("✅ Account created! Please login.")
+                    else:
+                        st.error("❌ Error creating account")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+
+def main_app():
+    """Main application interface"""
+    st.title("💰 Professional Dividend Tracker")
+    st.markdown(f"**Welcome, {st.session_state.username}!**")
+    
+    # Logout button in sidebar
+    with st.sidebar:
+        if st.button("🚪 Logout"):
+            for key in ['authenticated', 'user_id', 'username']:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.rerun()
+    
+    # Portfolio management in sidebar
+    st.sidebar.header("📊 Portfolio Management")
+    
+    # FIXED: Force refresh portfolio data
+    if 'portfolio_refresh' not in st.session_state:
+        st.session_state.portfolio_refresh = 0
+    
+    # Load existing portfolio with debug info
+    portfolio = tracker.db.get_portfolio(st.session_state.user_id)
+    
+    # Add stock form
+    with st.sidebar.form("add_stock_form"):
+        st.subheader("➕ Add Stock")
+        
+        symbol = st.text_input(
+            "Stock Symbol", 
+            placeholder="e.g., AAPL, RIO.L, LR.PA, ASML",
+            help="Use Yahoo Finance format"
+        ).upper().strip()
+        
+        shares = st.number_input("Number of Shares", min_value=0.001, value=1.0, step=1.0, format="%.3f")
+        
+        submitted = st.form_submit_button("Add to Portfolio")
+        
+        if submitted and symbol:
+            success = tracker.db.save_portfolio(st.session_state.user_id, symbol, shares)
+            if success:
+                st.session_state.portfolio_refresh += 1  # Force refresh
+                time.sleep(0.5)  # Brief pause
+                st.rerun()
+            else:
+                st.error("❌ Error saving to portfolio")
+    
+    # Display current portfolio - FIXED to show all stocks
+    if portfolio:
+        st.sidebar.subheader(f"📋 Current Portfolio ({len(portfolio)} stocks)")
+        for item in portfolio:
+            col1, col2 = st.sidebar.columns([3, 1])
+            col1.text(f"{item['symbol']}: {float(item['shares']):.1f} shares")
+            if col2.button("🗑️", key=f"remove_{item['symbol']}", help=f"Remove {item['symbol']}"):
+                if tracker.db.delete_portfolio_item(st.session_state.user_id, item['symbol']):
+                    st.session_state.portfolio_refresh += 1  # Force refresh
+                    time.sleep(0.5)
+                    st.rerun()
+    else:
+        st.sidebar.info("No stocks in portfolio yet")
+    
+    # Market examples
+    with st.sidebar.expander("🔍 Market Examples"):
+        st.markdown("""
+        **US Markets:** AAPL, MSFT, JNJ, PG  
+        **UK (.L):** SHEL.L, BP.L, RIO.L  
+        **France (.PA):** MC.PA, OR.PA, LR.PA  
+        **Germany (.DE):** SAP, BMW.DE  
+        **Netherlands:** ASML, HEIA.AS  
+        **Switzerland (.SW):** NESN.SW  
+        **Canada (.TO):** SHOP.TO, RY.TO  
+        **Australia (.AX):** CBA.AX, BHP.AX  
+        """)
+    
+    # Main content area
+    if not portfolio:
+        st.info("👆 Add stocks to your portfolio using the sidebar to get started!")
+        
+        # Show example
+        st.subheader("📱 Example Usage")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown("**US Stock:**\n- Symbol: `AAPL`\n- Shares: `10`")
+        with col2:
+            st.markdown("**UK Stock:**\n- Symbol: `RIO.L`\n- Shares: `25`")
+        with col3:
+            st.markdown("**European Stock:**\n- Symbol: `ASML`\n- Shares: `5`")
+    else:
+        # Display portfolio count - FIXED
+        st.info(f"📈 You have {len(portfolio)} stocks in your portfolio. Click 'Analyze Portfolio' to get current data!")
+        
+        # Analyze portfolio button
+        if st.button("🔍 Analyze Portfolio", type="primary"):
+            with st.spinner("Getting exchange rates..."):
+                tracker.data_provider.get_currency_rates()
+            
+            # Progress bar
+            progress_bar = st.progress(0)
+            results = []
+            
+            st.subheader("🔄 Analysis Progress")
+            
+            for i, item in enumerate(portfolio):
+                st.write(f"**{i+1}/{len(portfolio)}** - Analyzing {item['symbol']}...")
+                
+                # Get stock data using professional data sources
+                stock_data = tracker.data_provider.get_stock_data(item['symbol'])
+                
+                if stock_data:
+                    market, country, currency = tracker.detect_currency_and_market(item['symbol'])
+                    
+                    # Override currency if we got it from API
+                    if 'currency' in stock_data:
+                        currency = stock_data['currency']
+                    
+                    # Calculate position value
+                    current_price_num = stock_data.get('current_price', 0)
+                    position_value = float(item['shares']) * current_price_num
+                    
+                    result = {
+                        'symbol': item['symbol'],
+                        'shares': float(item['shares']),
+                        'company_name': stock_data.get('company_name', item['symbol'])[:40],
+                        'market': market,
+                        'country': country,
+                        'currency': currency,
+                        'current_price': tracker.format_currency(current_price_num, currency),
+                        'position_value': tracker.format_currency(position_value, currency),
+                        'dividend_info': stock_data.get('dividend_info', 'No dividend data'),
+                        'data_source': stock_data.get('source', 'Unknown'),
+                        'status': '✅ Success'
+                    }
+                else:
+                    result = {
+                        'symbol': item['symbol'],
+                        'shares': float(item['shares']),
+                        'company_name': 'Data unavailable',
+                        'status': '❌ Failed to retrieve data',
+                        'data_source': 'All sources failed'
+                    }
+                
+                results.append(result)
+                progress_bar.progress((i + 1) / len(portfolio))
+            
+            # Store results
+            st.session_state.analysis_results = results
+            st.balloons()  # Celebration animation
+            st.success(f"✅ Analysis complete! Processed {len(results)} stocks successfully.")
+        
+        # Display results if available
+        if 'analysis_results' in st.session_state:
+            results = st.session_state.analysis_results
+            
+            # Summary metrics - ENHANCED
+            st.subheader("📊 Portfolio Summary")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Stocks", len(results))
+            with col2:
+                successful = sum(1 for r in results if r.get('status') == '✅ Success')
+                st.metric("Data Retrieved", f"{successful}/{len(results)}")
+            with col3:
+                sources = [r.get('data_source', 'Unknown') for r in results if r.get('data_source') and 'failed' not in r.get('data_source', '').lower()]
+                unique_sources = len(set(sources))
+                st.metric("Active Data Sources", unique_sources)
+            with col4:
+                total_positions = len([r for r in results if r.get('position_value')])
+                st.metric("Valued Positions", total_positions)
+            
+            # Results table - ENHANCED with better formatting
+            st.subheader("💼 Portfolio Details")
+            
+            if results:
+                # Separate successful and failed results
+                successful_results = [r for r in results if r.get('status') == '✅ Success']
+                failed_results = [r for r in results if r.get('status') != '✅ Success']
+                
+                if successful_results:
+                    # Create display table for successful results
+                    display_data = []
+                    for result in successful_results:
+                        display_data.append({
+                            'Symbol': result['symbol'],
+                            'Company': result.get('company_name', 'N/A'),
+                            'Shares': f"{result['shares']:.1f}",
+                            'Market': result.get('country', 'N/A'),
+                            'Currency': result.get('currency', 'N/A'),
+                            'Current Price': result.get('current_price', 'N/A'),
+                            'Position Value': result.get('position_value', 'N/A'),
+                            'Dividend Info': result.get('dividend_info', 'N/A'),
+                            'Data Source': result.get('data_source', 'N/A')
+                        })
+                    
+                    df_display = pd.DataFrame(display_data)
+                    st.dataframe(df_display, use_container_width=True, height=400)
+                    
+                    # Calculate total portfolio value (USD equivalent)
+                    if tracker.data_provider.currency_rates:
+                        total_usd = 0
+                        currency_breakdown = {}
+                        
+                        for result in successful_results:
+                            if result.get('position_value') and result.get('currency'):
+                                # Extract numeric value from formatted string
+                                value_str = str(result['position_value']).replace(', '').replace('€', '').replace('£', '').replace('C, '').replace('A, '').replace(',', '')
                                 try:
                                     value = float(value_str)
                                     currency = result['currency']
