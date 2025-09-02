@@ -694,7 +694,7 @@ def main_app():
         for item in portfolio:
             col1, col2 = st.sidebar.columns([3, 1])
             col1.text(f"{item['symbol']}: {float(item['shares']):.1f} shares")
-            if col2.button("🗑️", key=f"remove_{item['symbol']}", help=f"Remove {item['symbol']}"):
+            if col2.button("🗑️", key=f"remove_{item['symbol']}_{st.session_state.user_id}_{hash(str(item))}", help=f"Remove {item['symbol']}"):
                 if tracker.db.delete_portfolio_item(st.session_state.user_id, item['symbol']):
                     st.session_state.portfolio_refresh += 1  # Force refresh
                     time.sleep(0.5)
