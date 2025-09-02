@@ -845,7 +845,7 @@ def main_app():
                         for result in successful_results:
                             if result.get('position_value') and result.get('currency'):
                                 # Extract numeric value from formatted string
-                                value_str = str(result['position_value']).replace(', '').replace('€', '').replace('£', '').replace('C, '').replace('A, '').replace(',', '')
+                                value_str = str(result['position_value']).replace('$', '').replace('EUR', '').replace('GBP', '').replace('CHF', '').replace('SEK', '').replace('NOK', '').replace('DKK', '').replace(',', '').strip()
                                 try:
                                     value = float(value_str)
                                     currency = result['currency']
