@@ -649,7 +649,7 @@ def main_app():
     
     # Logout button in sidebar
     with st.sidebar:
-        if st.button("🚪 Logout"):
+        if st.button("🚪 Logout", key="logout_btn"):
             for key in ['authenticated', 'user_id', 'username']:
                 if key in st.session_state:
                     del st.session_state[key]
