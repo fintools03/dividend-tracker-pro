@@ -1020,6 +1020,11 @@ def login_page():
 
 def main_app():
     """Main application interface"""
+    # Prevent duplicate runs
+    if 'app_initialized' not in st.session_state:
+        st.session_state.app_initialized = True
+    else:
+        return
     st.title("💰 Professional Dividend Tracker")
     st.markdown(f"**Welcome, {st.session_state.username}!**")
     
