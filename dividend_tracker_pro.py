@@ -106,12 +106,12 @@ class DividendData:
     status: str = "No data"
     
     def format_display(self, currency: str = "USD") -> str:
-    if self.annual_dividend > 0:
-        if currency == 'GBP':
-            return f"Annual: GBP {self.annual_dividend:.2f} (Yield: {self.yield_percent:.2f}%)"
-        else:
-            return f"Annual: {currency} {self.annual_dividend:.2f} (Yield: {self.yield_percent:.2f}%)"
-    return self.status
+        if self.annual_dividend > 0:
+            if currency == 'GBP':
+                return f"Annual: GBP {self.annual_dividend:.2f} (Yield: {self.yield_percent:.2f}%)"
+            else:
+                return f"Annual: {currency} {self.annual_dividend:.2f} (Yield: {self.yield_percent:.2f}%)"
+        return self.status
 
 @dataclass
 class StockData:
