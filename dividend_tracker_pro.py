@@ -486,8 +486,8 @@ class DataProviderService:
                 dividend_data.status = "Complete dividend data available"
             else:
                 dividend_data.status = "No dividend history found"
-    except:
-        dividend_data.status = "Error retrieving dividend data"
+        except:
+            dividend_data.status = "Error retrieving dividend data"
     
         def _get_alpha_vantage_data(self, symbol: str) -> Optional[StockData]:
             ts = TimeSeries(key=self.alpha_vantage_key, output_format='pandas')
