@@ -454,18 +454,40 @@ class DataProviderService:
         # Get dividend data
         dividend_data = DividendData()
         try:
-        dividends = stock.dividends.tail(8)
-        if not dividends.empty:
-            last_dividend = dividends.iloc[-1]
-            dividend_data.last_dividend = float(last_dividend)
-            dividend_data.last_dividend_date = dividends.index[-1].strftime('%Y-%m-%d')
+            dividends = stock.dividends.tail(12)  # Get more history
+            if not dividends.empty:
+                last_dividend = dividends.iloc[-1]
+                dividend_data.last_dividend = float(last_dividend)
+                dividend_data.last_dividend_date = dividends.index[-1].strftime('%Y-%m-%d')
         
-            recent_year_dividends = dividends.last('365D').sum()
-            dividend_data.annual_dividend = float(recent_year_dividends)
-            dividend_data.payment_count = len(dividends)
+                # Better annual dividend calculation
+                one_year_ago = datetime.now() - timedelta(days=365)
+                recent_dividends = dividends[dividends.index > one_year_ago]
         
-        if current_price > 0:
-            dividend_data.yield_percent = (recent_year_dividends / current_price) * 100
+                if len(recent_dividends) >= 4:
+                    annual_dividend = recent_dividends.sum()
+                elif len(recent_dividends) >= 2:
+                    avg_dividend = recent_dividends.mean()
+                    days_span = (recent_dividends.index[-1] - recent_dividends.index[0]).days
+                    if days_span > 0:
+                        payments_per_year = len(recent_dividends) * (365 / days_span)
+                        annual_dividend = avg_dividend * payments_per_year
+                    else:
+                        annual_dividend = info.get('dividendRate', last_dividend * 4)
+                else:
+                    annual_dividend = info.get('dividendRate', last_dividend * 4)
+        
+                dividend_data.annual_dividend = float(annual_dividend)
+                dividend_data.payment_count = len(dividends)
+        
+                if current_price > 0 and annual_dividend > 0:
+                    dividend_data.yield_percent = (annual_dividend / current_price) * 100
+        
+            dividend_data.status = "Complete dividend data available"
+        else:
+            dividend_data.status = "No dividend history found"
+    except:
+        dividend_data.status = "Error retrieving dividend data"
     
         def _get_alpha_vantage_data(self, symbol: str) -> Optional[StockData]:
             ts = TimeSeries(key=self.alpha_vantage_key, output_format='pandas')
