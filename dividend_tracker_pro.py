@@ -106,12 +106,12 @@ class DividendData:
     status: str = "No data"
     
     def format_display(self, currency: str = "USD") -> str:
-        if self.annual_dividend > 0:
-            if currency == 'GBP':
-                return f"Annual: {self.annual_dividend:.1f}p (Yield: {self.yield_percent:.2f}%)"
-            else:
-                return f"Annual: {currency} {self.annual_dividend:.2f} (Yield: {self.yield_percent:.2f}%)"
-        return self.status
+    if self.annual_dividend > 0:
+        if currency == 'GBP':
+            return f"Annual: GBP {self.annual_dividend:.2f} (Yield: {self.yield_percent:.2f}%)"
+        else:
+            return f"Annual: {currency} {self.annual_dividend:.2f} (Yield: {self.yield_percent:.2f}%)"
+    return self.status
 
 @dataclass
 class StockData:
@@ -454,40 +454,25 @@ class DataProviderService:
         # Get dividend data
         dividend_data = DividendData()
         try:
-            dividends = stock.dividends.tail(8)
-            if not dividends.empty:
-                last_dividend = dividends.iloc[-1]
-                dividend_data.last_dividend = float(last_dividend)
-                dividend_data.last_dividend_date = dividends.index[-1].strftime('%Y-%m-%d')
-                
-                recent_year_dividends = dividends.last('365D').sum()
-                dividend_data.annual_dividend = float(recent_year_dividends)
-                dividend_data.payment_count = len(dividends)
-                
-                if current_price > 0:
-                    dividend_data.yield_percent = (recent_year_dividends / current_price) * 100
-                
-                dividend_data.status = "Complete dividend data available"
-            else:
-                dividend_data.status = "No dividend history found"
-        except:
-            dividend_data.status = "Error retrieving dividend data"
+        dividends = stock.dividends.tail(8)
+        if not dividends.empty:
+            last_dividend = dividends.iloc[-1]
+            dividend_data.last_dividend = float(last_dividend)
+            dividend_data.last_dividend_date = dividends.index[-1].strftime('%Y-%m-%d')
         
-        return StockData(
-            symbol=symbol,
-            current_price=float(current_price),
-            currency=info.get('currency', 'USD'),
-            company_name=info.get('longName', info.get('shortName', symbol)),
-            source='Yahoo Finance',
-            dividend_data=dividend_data
-        )
+            recent_year_dividends = dividends.last('365D').sum()
+            dividend_data.annual_dividend = float(recent_year_dividends)
+            dividend_data.payment_count = len(dividends)
+        
+        if current_price > 0:
+            dividend_data.yield_percent = (recent_year_dividends / current_price) * 100
     
-    def _get_alpha_vantage_data(self, symbol: str) -> Optional[StockData]:
-        ts = TimeSeries(key=self.alpha_vantage_key, output_format='pandas')
-        data, meta_data = ts.get_daily(symbol=symbol, outputsize='compact')
+        def _get_alpha_vantage_data(self, symbol: str) -> Optional[StockData]:
+            ts = TimeSeries(key=self.alpha_vantage_key, output_format='pandas')
+            data, meta_data = ts.get_daily(symbol=symbol, outputsize='compact')
         
         if data is None or data.empty:
-            return None
+                return None
         
         current_price = float(data.iloc[0]['4. close'])
         
