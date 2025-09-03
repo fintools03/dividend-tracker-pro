@@ -483,9 +483,9 @@ class DataProviderService:
                 if current_price > 0 and annual_dividend > 0:
                     dividend_data.yield_percent = (annual_dividend / current_price) * 100
         
-            dividend_data.status = "Complete dividend data available"
-        else:
-            dividend_data.status = "No dividend history found"
+                dividend_data.status = "Complete dividend data available"
+            else:
+                dividend_data.status = "No dividend history found"
     except:
         dividend_data.status = "Error retrieving dividend data"
     
