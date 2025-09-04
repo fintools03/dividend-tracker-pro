@@ -22,13 +22,22 @@ class FinnhubClient:
         """Get current stock price from Finnhub"""
         try:
             # Convert UK symbols for Finnhub (RIO.L -> RIO.LON)
-            finnhub_symbol = symbol.replace('.L', '.LON') if symbol.endswith('.L') else symbol
+            if symbol.endswith('.L'):
+                # Try different UK formats for Finnhub
+                base_symbol = symbol.replace('.L', '')
+                # Let's try the base symbol without any suffix first
+                finnhub_symbol = base_symbol
+            else:
+                finnhub_symbol = symbol
             
             url = f"{self.base_url}/quote"
             params = {'symbol': finnhub_symbol, 'token': self.api_key}
             
             response = requests.get(url, params=params, timeout=10)
             data = response.json()
+            
+            print(f"Trying {finnhub_symbol} for original {symbol}")
+            print(f"API response: {data}")
             
             if 'c' in data and data['c'] > 0:
                 return {
