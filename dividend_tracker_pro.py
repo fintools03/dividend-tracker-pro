@@ -284,8 +284,8 @@ def main_app():
             price_data = finnhub.get_stock_price(item['symbol'])
             dividend_data = finnhub.get_dividend_info(item['symbol'])
     
-            if price_data:
-                if price_data['currency'] == 'GBP':
+        if price_data:
+            if price_data['currency'] == 'GBP':
                 price_display = f"{price_data['price']:.1f}p"
                 position_value = float(item['shares']) * price_data['price']
                 value_display = f"£{position_value / 100:.2f}"
