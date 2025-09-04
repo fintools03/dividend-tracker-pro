@@ -225,7 +225,7 @@ def main():
     """Main application entry point"""
     # Initialize session state
     if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
+        st.session_state.authenticated = False
 
     # Check for remembered login
     if not st.session_state.authenticated:
