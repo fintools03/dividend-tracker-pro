@@ -51,7 +51,7 @@ class FinnhubClient:
             return None
 
     def get_dividend_info(self, symbol):
-    """Get dividend information from Finnhub"""
+        """Get dividend information from Finnhub"""
         try:
             # Convert UK symbols for Finnhub
             finnhub_symbol = symbol.replace('.L', '') if symbol.endswith('.L') else symbol
