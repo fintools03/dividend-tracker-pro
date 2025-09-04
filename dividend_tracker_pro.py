@@ -263,7 +263,7 @@ def main_app():
             
             with col3:
                 if price_data:
-                    position_value = item['shares'] * price_data['price']
+                    position_value = float(item['shares']) * price_data['price']
                     if price_data['currency'] == 'GBP':
                         # Convert pence to pounds for position value
                         position_pounds = position_value / 100
@@ -283,7 +283,7 @@ def main_app():
         for item in portfolio:
             price_data = finnhub.get_stock_price(item['symbol'])
             if price_data:
-                position_value = item['shares'] * price_data['price']
+                position_value = float(item['shares']) * price_data['price']
                 if price_data['currency'] == 'GBP':
                     total_gbp += position_value / 100  # Convert pence to pounds
                 else:
