@@ -322,28 +322,28 @@ if table_data:
     import pandas as pd
     df = pd.DataFrame(table_data)
     st.dataframe(df, use_container_width=True)
+
+# Portfolio total
+st.subheader("Portfolio Total")
+total_usd = 0
+total_gbp = 0
         
-        # Portfolio total
-        st.subheader("Portfolio Total")
-        total_usd = 0
-        total_gbp = 0
+for item in portfolio:
+    price_data = finnhub.get_stock_price(item['symbol'])
+    if price_data:
+        position_value = float(item['shares']) * price_data['price']
+        if price_data['currency'] == 'GBP':
+            total_gbp += position_value / 100  # Convert pence to pounds
+        else:
+            total_usd += position_value
         
-        for item in portfolio:
-            price_data = finnhub.get_stock_price(item['symbol'])
-            if price_data:
-                position_value = float(item['shares']) * price_data['price']
-                if price_data['currency'] == 'GBP':
-                    total_gbp += position_value / 100  # Convert pence to pounds
-                else:
-                    total_usd += position_value
-        
-        if total_usd > 0:
-            st.write(f"USD Holdings: ${total_usd:.2f}")
-        if total_gbp > 0:
-            st.write(f"GBP Holdings: £{total_gbp:.2f}")
-        
-    else:
-        st.info("Add some stocks to your portfolio using the sidebar to get started!")
+if total_usd > 0:
+    st.write(f"USD Holdings: ${total_usd:.2f}")
+if total_gbp > 0:
+    st.write(f"GBP Holdings: £{total_gbp:.2f}")
+
+else:
+    st.info("Add some stocks to your portfolio using the sidebar to get started!")
 
 def main():
     """Main application entry point"""
