@@ -139,7 +139,7 @@ def login_page():
                     st.query_params['user'] = user['username']
                     st.query_params['session'] = 'active'
                     st.success("Login successful!")
-                st.rerun()
+                    st.rerun()
                 else:
                     st.error("Invalid username or password")
     
