@@ -273,21 +273,16 @@ def main_app():
     # Main content area
     portfolio = db.get_portfolio(st.session_state.user_id)
     
-    if portfolio:
-        st.subheader("Portfolio with Current Prices and Dividends")
-
-        finnhub = FinnhubClient()
-
-        # Create table data
-        table_data = []
-        for item in portfolio:
-            price_data = finnhub.get_stock_price(item['symbol'])
-            dividend_data = finnhub.get_dividend_info(item['symbol'])
-
-        if table_data:
-            import pandas as pd
-            df = pd.DataFrame(table_data)
-            st.dataframe(df, use_container_width=True)
+   if portfolio:
+    st.subheader("Portfolio with Current Prices and Dividends")
+    
+    finnhub = FinnhubClient()
+    
+    # Create table data
+    table_data = []
+    for item in portfolio:
+        price_data = finnhub.get_stock_price(item['symbol'])
+        dividend_data = finnhub.get_dividend_info(item['symbol'])
         
         if price_data:
             if price_data['currency'] == 'GBP':
@@ -298,49 +293,53 @@ def main_app():
                 price_display = f"${price_data['price']:.2f}"
                 position_value = float(item['shares']) * price_data['price']
                 value_display = f"${position_value:.2f}"
-    else:
-        price_display = "Not available"
-        value_display = "N/A"
-    
-    # Format dividend info
-    if dividend_data:
-        if dividend_data['currency'] == 'GBP':
-            dividend_display = f"{dividend_data['dividend_per_share']:.1f}p"
         else:
-            dividend_display = f"${dividend_data['dividend_per_share']:.3f}"
-        ex_date_display = dividend_data['ex_date']
-    else:
-        dividend_display = "N/A"
-        ex_date_display = "N/A"
-    
-    table_data.append({
-        'Symbol': item['symbol'],
-        'Shares': f"{float(item['shares']):.1f}",
-        'Current Price': price_display,
-        'Position Value': value_display,
-        'Dividend/Share': dividend_display,
-        'Ex-Date': ex_date_display
-    })
-
-# Portfolio total
-st.subheader("Portfolio Total")
-total_usd = 0
-total_gbp = 0
+            price_display = "Not available"
+            value_display = "N/A"
         
+        # Format dividend info
+        if dividend_data:
+            if dividend_data['currency'] == 'GBP':
+                dividend_display = f"{dividend_data['dividend_per_share']:.1f}p"
+            else:
+                dividend_display = f"${dividend_data['dividend_per_share']:.3f}"
+            ex_date_display = dividend_data['ex_date']
+        else:
+            dividend_display = "N/A"
+            ex_date_display = "N/A"
+        
+        table_data.append({
+            'Symbol': item['symbol'],
+            'Shares': f"{float(item['shares']):.1f}",
+            'Current Price': price_display,
+            'Position Value': value_display,
+            'Dividend/Share': dividend_display,
+            'Ex-Date': ex_date_display
+        })
+    
+    # Display table
+    import pandas as pd
+    df = pd.DataFrame(table_data)
+    st.dataframe(df, use_container_width=True)
+    
+    # Portfolio total
+    st.subheader("Portfolio Total")
+    total_usd = 0
+    total_gbp = 0
+    
     for item in portfolio:
         price_data = finnhub.get_stock_price(item['symbol'])
         if price_data:
             position_value = float(item['shares']) * price_data['price']
             if price_data['currency'] == 'GBP':
-                total_gbp += position_value / 100  # Convert pence to pounds
-        else:
-            total_usd += position_value
-        
-if total_usd > 0:
-    st.write(f"USD Holdings: ${total_usd:.2f}")
-if total_gbp > 0:
-    st.write(f"GBP Holdings: £{total_gbp:.2f}")
-
+                total_gbp += position_value / 100
+            else:
+                total_usd += position_value
+    
+    if total_usd > 0:
+        st.write(f"USD Holdings: ${total_usd:.2f}")
+    if total_gbp > 0:
+        st.write(f"GBP Holdings: £{total_gbp:.2f}")
 else:
     st.info("Add some stocks to your portfolio using the sidebar to get started!")
 
