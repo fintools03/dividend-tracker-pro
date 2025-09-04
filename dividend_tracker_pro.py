@@ -327,12 +327,12 @@ st.subheader("Portfolio Total")
 total_usd = 0
 total_gbp = 0
         
-for item in portfolio:
-    price_data = finnhub.get_stock_price(item['symbol'])
-    if price_data:
-        position_value = float(item['shares']) * price_data['price']
-        if price_data['currency'] == 'GBP':
-            total_gbp += position_value / 100  # Convert pence to pounds
+    for item in portfolio:
+        price_data = finnhub.get_stock_price(item['symbol'])
+        if price_data:
+            position_value = float(item['shares']) * price_data['price']
+            if price_data['currency'] == 'GBP':
+                total_gbp += position_value / 100  # Convert pence to pounds
         else:
             total_usd += position_value
         
