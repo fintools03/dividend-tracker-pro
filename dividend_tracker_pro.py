@@ -1,9 +1,10 @@
-# dividend_tracker.py - Phase 1: Basic Foundation
+# dividend_tracker.py - Phase 2: Stock Prices Added
 import streamlit as st
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import bcrypt
 from decouple import config
+import requests
 
 # Page configuration
 st.set_page_config(
@@ -11,6 +12,34 @@ st.set_page_config(
     page_icon="💰",
     layout="wide"
 )
+
+class FinnhubClient:
+    def __init__(self):
+        self.api_key = "d2sncqpr01qiq7a53gngd2sncqpr01qiq7a53go0"
+        self.base_url = "https://finnhub.io/api/v1"
+    
+    def get_stock_price(self, symbol):
+        """Get current stock price from Finnhub"""
+        try:
+            # Convert UK symbols for Finnhub (RIO.L -> RIO.LON)
+            finnhub_symbol = symbol.replace('.L', '.LON') if symbol.endswith('.L') else symbol
+            
+            url = f"{self.base_url}/quote"
+            params = {'symbol': finnhub_symbol, 'token': self.api_key}
+            
+            response = requests.get(url, params=params, timeout=10)
+            data = response.json()
+            
+            if 'c' in data and data['c'] > 0:
+                return {
+                    'symbol': symbol,
+                    'price': data['c'],
+                    'currency': 'GBP' if symbol.endswith('.L') else 'USD'
+                }
+            return None
+        except Exception as e:
+            print(f"Finnhub error for {symbol}: {e}")
+            return None
 
 class DatabaseManager:
     def __init__(self):
@@ -32,7 +61,7 @@ class DatabaseManager:
             st.stop()
     
     def get_user(self, username):
-        """Get user by username"""
+        """Get user by username (case insensitive)"""
         try:
             cursor = self.connection.cursor(cursor_factory=RealDictCursor)
             cursor.execute("SELECT * FROM users WHERE LOWER(username) = LOWER(%s)", (username,))
@@ -211,28 +240,75 @@ def main_app():
     portfolio = db.get_portfolio(st.session_state.user_id)
     
     if portfolio:
-        st.subheader("Portfolio Summary")
-        st.write(f"You have {len(portfolio)} stocks in your portfolio:")
+        st.subheader("Portfolio with Current Prices")
+        
+        finnhub = FinnhubClient()
         
         for item in portfolio:
-            st.write(f"• {item['symbol']}: {item['shares']} shares")
+            col1, col2, col3 = st.columns([2, 2, 2])
+            
+            with col1:
+                st.write(f"**{item['symbol']}**")
+                st.write(f"{item['shares']} shares")
+            
+            with col2:
+                price_data = finnhub.get_stock_price(item['symbol'])
+                if price_data:
+                    if price_data['currency'] == 'GBP':
+                        st.write(f"Price: {price_data['price']:.1f}p")
+                    else:
+                        st.write(f"Price: ${price_data['price']:.2f}")
+                else:
+                    st.write("Price: Not available")
+            
+            with col3:
+                if price_data:
+                    position_value = item['shares'] * price_data['price']
+                    if price_data['currency'] == 'GBP':
+                        # Convert pence to pounds for position value
+                        position_pounds = position_value / 100
+                        st.write(f"Value: £{position_pounds:.2f}")
+                    else:
+                        st.write(f"Value: ${position_value:.2f}")
+                else:
+                    st.write("Value: N/A")
+            
+            st.write("---")  # Separator between stocks
         
-        st.info("Stock prices and dividend data will be added in Phase 2")
+        # Portfolio total
+        st.subheader("Portfolio Total")
+        total_usd = 0
+        total_gbp = 0
+        
+        for item in portfolio:
+            price_data = finnhub.get_stock_price(item['symbol'])
+            if price_data:
+                position_value = item['shares'] * price_data['price']
+                if price_data['currency'] == 'GBP':
+                    total_gbp += position_value / 100  # Convert pence to pounds
+                else:
+                    total_usd += position_value
+        
+        if total_usd > 0:
+            st.write(f"USD Holdings: ${total_usd:.2f}")
+        if total_gbp > 0:
+            st.write(f"GBP Holdings: £{total_gbp:.2f}")
+        
     else:
         st.info("Add some stocks to your portfolio using the sidebar to get started!")
 
 def main():
     """Main application entry point"""
-    # Initialize session state
+    # Initialize session state with persistence
     if 'authenticated' not in st.session_state:
         st.session_state.authenticated = False
 
     # Check for remembered login
     if not st.session_state.authenticated:
-        # Try to restore session from URL parameters or browser state
+        # Try to restore session from URL parameters
         query_params = st.query_params
         if 'user' in query_params and 'session' in query_params:
-            # Simple session restoration (you can make this more secure later)
+            # Simple session restoration
             username = query_params['user']
             user = db.get_user(username)
             if user:
