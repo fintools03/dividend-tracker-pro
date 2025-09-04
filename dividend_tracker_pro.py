@@ -35,7 +35,7 @@ class DatabaseManager:
         """Get user by username"""
         try:
             cursor = self.connection.cursor(cursor_factory=RealDictCursor)
-            cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+            cursor.execute("SELECT * FROM users WHERE LOWER(username) = LOWER(%s)", (username,))
             user = cursor.fetchone()
             cursor.close()
             return user
@@ -135,8 +135,11 @@ def login_page():
                     st.session_state.authenticated = True
                     st.session_state.user_id = user['id']
                     st.session_state.username = user['username']
+                    # Set URL parameters to maintain session
+                    st.query_params['user'] = user['username']
+                    st.query_params['session'] = 'active'
                     st.success("Login successful!")
-                    st.rerun()
+                st.rerun()
                 else:
                     st.error("Invalid username or password")
     
@@ -222,7 +225,20 @@ def main():
     """Main application entry point"""
     # Initialize session state
     if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
+    st.session_state.authenticated = False
+
+    # Check for remembered login
+    if not st.session_state.authenticated:
+        # Try to restore session from URL parameters or browser state
+        query_params = st.query_params
+        if 'user' in query_params and 'session' in query_params:
+            # Simple session restoration (you can make this more secure later)
+            username = query_params['user']
+            user = db.get_user(username)
+            if user:
+                st.session_state.authenticated = True
+                st.session_state.user_id = user['id']
+                st.session_state.username = user['username']
     
     # Show appropriate page
     if st.session_state.authenticated:
