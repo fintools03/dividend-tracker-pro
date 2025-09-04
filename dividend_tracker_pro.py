@@ -283,7 +283,12 @@ def main_app():
         for item in portfolio:
             price_data = finnhub.get_stock_price(item['symbol'])
             dividend_data = finnhub.get_dividend_info(item['symbol'])
-    
+
+        if table_data:
+            import pandas as pd
+            df = pd.DataFrame(table_data)
+            st.dataframe(df, use_container_width=True)
+        
         if price_data:
             if price_data['currency'] == 'GBP':
                 price_display = f"{price_data['price']:.1f}p"
@@ -316,12 +321,6 @@ def main_app():
         'Dividend/Share': dividend_display,
         'Ex-Date': ex_date_display
     })
-
-# Display as table
-if table_data:
-    import pandas as pd
-    df = pd.DataFrame(table_data)
-    st.dataframe(df, use_container_width=True)
 
 # Portfolio total
 st.subheader("Portfolio Total")
