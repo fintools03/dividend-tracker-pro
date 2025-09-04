@@ -50,6 +50,32 @@ class FinnhubClient:
             print(f"Finnhub error for {symbol}: {e}")
             return None
 
+    def get_dividend_info(self, symbol):
+    """Get dividend information from Finnhub"""
+        try:
+            # Convert UK symbols for Finnhub
+            finnhub_symbol = symbol.replace('.L', '') if symbol.endswith('.L') else symbol
+        
+            url = f"{self.base_url}/stock/dividend"
+            params = {'symbol': finnhub_symbol, 'from': '2023-01-01', 'to': '2024-12-31', 'token': self.api_key}
+        
+            response = requests.get(url, params=params, timeout=10)
+            data = response.json()
+        
+            if data and len(data) > 0:
+                # Get the most recent dividend
+                latest_dividend = data[0]  # Assumes sorted by date
+                return {
+                    'dividend_per_share': latest_dividend.get('amount', 0),
+                    'ex_date': latest_dividend.get('exDate', 'N/A'),
+                    'currency': 'GBP' if symbol.endswith('.L') else 'USD'
+                }
+            return None
+        except Exception as e:
+            print(f"Dividend API error for {symbol}: {e}")
+            return None
+        
+
 class DatabaseManager:
     def __init__(self):
         self.connection = None
