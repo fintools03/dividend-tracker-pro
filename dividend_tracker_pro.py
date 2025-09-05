@@ -93,9 +93,9 @@ class FinnhubClient:
         
             return price_info, dividend_info
         
-    except Exception as e:
-        print(f"yfinance error for {symbol}: {e}")
-        return None, None
+        except Exception as e:
+            print(f"yfinance error for {symbol}: {e}")
+            return None, None
 
     def get_dividend_info(self, symbol):
         """Get dividend information from Finnhub"""
