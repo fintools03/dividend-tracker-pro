@@ -273,7 +273,7 @@ def main_app():
     # Main content area
     portfolio = db.get_portfolio(st.session_state.user_id)
     
-   if portfolio:
+if portfolio:
     st.subheader("Portfolio with Current Prices and Dividends")
     
     finnhub = FinnhubClient()
