@@ -1,11 +1,12 @@
-# dividend_tracker.py - Phase 2: Stock Prices Added
+# dividend_tracker.py - Clean Version with Yahoo Finance
 import streamlit as st
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import bcrypt
 from decouple import config
-import requests
 import yfinance as yf
+import pandas as pd
+from datetime import datetime
 
 # Page configuration
 st.set_page_config(
@@ -14,115 +15,6 @@ st.set_page_config(
     layout="wide"
 )
 
-class FinnhubClient:
-    def __init__(self):
-        self.api_key = "d2sncqpr01qiq7a53gngd2sncqpr01qiq7a53go0"
-        self.base_url = "https://finnhub.io/api/v1"
-    
-    def get_stock_price(self, symbol):
-        """Get current stock price from Finnhub"""
-        try:
-            # Convert UK symbols for Finnhub (RIO.L -> RIO.LON)
-            if symbol.endswith('.L'):
-                # Try different UK formats for Finnhub
-                base_symbol = symbol.replace('.L', '')
-                # Let's try the base symbol without any suffix first
-                finnhub_symbol = base_symbol
-            else:
-                finnhub_symbol = symbol
-            
-            url = f"{self.base_url}/quote"
-            params = {'symbol': finnhub_symbol, 'token': self.api_key}
-            
-            response = requests.get(url, params=params, timeout=10)
-            data = response.json()
-            print(f"Price API - Symbol: {finnhub_symbol}, Response: {data}")
-            
-            print(f"Trying {finnhub_symbol} for original {symbol}")
-            print(f"API response: {data}")
-            
-            if 'c' in data and data['c'] > 0:
-                return {
-                    'symbol': symbol,
-                    'price': data['c'],
-                    'currency': 'GBP' if symbol.endswith('.L') else 'USD'
-                }
-            return None
-        except Exception as e:
-            print(f"Finnhub error for {symbol}: {e}")
-            return None
-
-    def get_yfinance_data(self, symbol):
-        """Get stock and dividend data from yfinance"""
-        try:
-            stock = yf.Ticker(symbol)
-            info = stock.info
-        
-            # Get current price
-            current_price = (
-                info.get('currentPrice') or 
-                info.get('regularMarketPrice') or 
-                info.get('previousClose') or 
-            0
-        )
-        
-            if current_price == 0:
-                return None, None
-        
-            # Get dividend data
-            try:
-                dividends = stock.dividends.tail(4)  # Last 4 payments
-                if not dividends.empty:
-                    last_dividend = dividends.iloc[-1]
-                    last_date = dividends.index[-1].strftime('%Y-%m-%d')
-                    dividend_info = {
-                        'dividend_per_share': float(last_dividend),
-                        'ex_date': last_date,
-                        'currency': info.get('currency', 'USD')
-                    }
-                else:
-                    dividend_info = None
-            except:
-                dividend_info = None
-        
-            price_info = {
-                'symbol': symbol,
-                'price': current_price,
-                'currency': info.get('currency', 'USD')
-            }
-        
-            return price_info, dividend_info
-        
-        except Exception as e:
-            print(f"yfinance error for {symbol}: {e}")
-            return None, None
-
-    def get_dividend_info(self, symbol):
-        """Get dividend information from Finnhub"""
-        try:
-            # Convert UK symbols for Finnhub
-            finnhub_symbol = symbol.replace('.L', '') if symbol.endswith('.L') else symbol
-        
-            url = f"{self.base_url}/stock/dividend"
-            params = {'symbol': finnhub_symbol, 'from': '2023-01-01', 'to': '2024-12-31', 'token': self.api_key}
-        
-            response = requests.get(url, params=params, timeout=10)
-            data = response.json()
-            print(f"Dividend API - Symbol: {finnhub_symbol}, Response: {data}")
-        
-            if data and len(data) > 0:
-                # Get the most recent dividend
-                latest_dividend = data[0]  # Assumes sorted by date
-                return {
-                    'dividend_per_share': latest_dividend.get('amount', 0),
-                    'ex_date': latest_dividend.get('exDate', 'N/A'),
-                    'currency': 'GBP' if symbol.endswith('.L') else 'USD'
-                }
-            return None
-        except Exception as e:
-            print(f"Dividend API error for {symbol}: {e}")
-            return None
-        
 class DatabaseManager:
     def __init__(self):
         self.connection = None
@@ -136,10 +28,10 @@ class DatabaseManager:
                 self.connection = psycopg2.connect(database_url)
                 st.sidebar.success("Database connected")
             else:
-                st.error("No database connection available")
+                st.error("No database connection")
                 st.stop()
         except Exception as e:
-            st.error(f"Database connection failed: {e}")
+            st.error(f"Database error: {e}")
             st.stop()
     
     def get_user(self, username):
@@ -221,12 +113,107 @@ class DatabaseManager:
             st.error(f"Error removing stock: {e}")
             return False
 
+class YahooFinanceClient:
+    def get_stock_data(self, symbol):
+        """Get stock price and dividend data from Yahoo Finance"""
+        try:
+            stock = yf.Ticker(symbol)
+            info = stock.info
+            
+            # Get current price
+            current_price = (
+                info.get('currentPrice') or 
+                info.get('regularMarketPrice') or 
+                info.get('previousClose') or 
+                0
+            )
+            
+            if current_price == 0:
+                return None
+            
+            # Get dividend data
+            dividend_info = self._get_dividend_data(stock, info)
+            
+            return {
+                'symbol': symbol,
+                'price': current_price,
+                'currency': info.get('currency', 'USD'),
+                'company_name': info.get('longName', info.get('shortName', symbol)),
+                'dividend_per_share': dividend_info['dividend_per_share'],
+                'ex_date': dividend_info['ex_date'],
+                'annual_dividend': dividend_info['annual_dividend'],
+                'dividend_yield': dividend_info['dividend_yield']
+            }
+            
+        except Exception as e:
+            print(f"Yahoo Finance error for {symbol}: {e}")
+            return None
+    
+    def _get_dividend_data(self, stock, info):
+        """Extract dividend information"""
+        try:
+            # Get dividend history
+            dividends = stock.dividends.tail(8)
+            
+            if not dividends.empty:
+                # Last dividend payment
+                last_dividend = float(dividends.iloc[-1])
+                last_date = dividends.index[-1].strftime('%Y-%m-%d')
+                
+                # Calculate annual dividend (last 12 months)
+                one_year_ago = datetime.now() - pd.DateOffset(days=365)
+                recent_dividends = dividends[dividends.index > one_year_ago]
+                annual_dividend = float(recent_dividends.sum()) if not recent_dividends.empty else last_dividend * 4
+                
+                # Calculate yield
+                current_price = (
+                    info.get('currentPrice') or 
+                    info.get('regularMarketPrice') or 
+                    info.get('previousClose') or 
+                    0
+                )
+                
+                dividend_yield = (annual_dividend / current_price * 100) if current_price > 0 else 0
+                
+                return {
+                    'dividend_per_share': last_dividend,
+                    'ex_date': last_date,
+                    'annual_dividend': annual_dividend,
+                    'dividend_yield': dividend_yield
+                }
+            else:
+                return {
+                    'dividend_per_share': 0,
+                    'ex_date': 'N/A',
+                    'annual_dividend': 0,
+                    'dividend_yield': 0
+                }
+                
+        except Exception:
+            return {
+                'dividend_per_share': 0,
+                'ex_date': 'N/A',
+                'annual_dividend': 0,
+                'dividend_yield': 0
+            }
+
 # Initialize database
 @st.cache_resource
 def get_db():
     return DatabaseManager()
 
 db = get_db()
+
+def format_currency(amount, currency, is_uk_stock=False):
+    """Format currency properly"""
+    if currency == 'GBP' and is_uk_stock:
+        return f"{amount:.1f}p"  # UK stocks in pence
+    elif currency == 'GBP':
+        return f"£{amount:.2f}"
+    elif currency == 'USD':
+        return f"${amount:.2f}"
+    else:
+        return f"{currency} {amount:.2f}"
 
 def login_page():
     """Display login page"""
@@ -246,7 +233,6 @@ def login_page():
                     st.session_state.authenticated = True
                     st.session_state.user_id = user['id']
                     st.session_state.username = user['username']
-                    # Set URL parameters to maintain session
                     st.query_params['user'] = user['username']
                     st.query_params['session'] = 'active'
                     st.success("Login successful!")
@@ -272,8 +258,6 @@ def login_page():
                 else:
                     if db.create_user(new_username, new_password, new_email):
                         st.success("Account created! Please login.")
-                    else:
-                        st.error("Error creating account")
 
 def main_app():
     """Main application"""
@@ -311,7 +295,7 @@ def main_app():
                 with col1:
                     st.write(f"{item['symbol']}: {item['shares']}")
                 with col2:
-                    if st.button("❌", key=f"remove_{item['symbol']}"):
+                    if st.button("X", key=f"remove_{item['symbol']}"):
                         if db.remove_stock(st.session_state.user_id, item['symbol']):
                             st.success(f"Removed {item['symbol']}")
                             st.rerun()
@@ -322,87 +306,101 @@ def main_app():
     portfolio = db.get_portfolio(st.session_state.user_id)
     
     if portfolio:
-        st.subheader("Portfolio with Current Prices and Dividends")
-    
-        finnhub = FinnhubClient()
-    
-        # Create table data
+        st.subheader("Portfolio Analysis")
+        
+        yahoo_client = YahooFinanceClient()
         table_data = []
+        total_value = {}
+        
         for item in portfolio:
-            price_data = finnhub.get_stock_price(item['symbol'])
-            dividend_data = finnhub.get_dividend_info(item['symbol'])
-        
-            if price_data:
-                if price_data['currency'] == 'GBP':
-                    price_display = f"{price_data['price']:.1f}p"
-                    position_value = float(item['shares']) * price_data['price']
-                    value_display = f"£{position_value / 100:.2f}"
+            stock_data = yahoo_client.get_stock_data(item['symbol'])
+            
+            if stock_data:
+                is_uk_stock = item['symbol'].endswith('.L')
+                currency = stock_data['currency']
+                
+                # Format price
+                if is_uk_stock and currency == 'GBP':
+                    price_display = format_currency(stock_data['price'], currency, True)
+                    # Calculate position value
+                    position_value = float(item['shares']) * stock_data['price']
+                    value_display = f"£{position_value / 100:.2f}"  # Convert pence to pounds
                 else:
-                    price_display = f"${price_data['price']:.2f}"
-                    position_value = float(item['shares']) * price_data['price']
-                    value_display = f"${position_value:.2f}"
-            else:
-                price_display = "Not available"
-                value_display = "N/A"
-        
-            # Format dividend info
-            if dividend_data:
-                if dividend_data['currency'] == 'GBP':
-                    dividend_display = f"{dividend_data['dividend_per_share']:.1f}p"
+                    price_display = format_currency(stock_data['price'], currency)
+                    position_value = float(item['shares']) * stock_data['price']
+                    value_display = format_currency(position_value, currency)
+                
+                # Format dividend
+                if stock_data['dividend_per_share'] > 0:
+                    if is_uk_stock and currency == 'GBP':
+                        dividend_display = f"{stock_data['dividend_per_share']:.1f}p"
+                    else:
+                        dividend_display = format_currency(stock_data['dividend_per_share'], currency)
+                    
+                    yield_display = f"{stock_data['dividend_yield']:.2f}%"
                 else:
-                    dividend_display = f"${dividend_data['dividend_per_share']:.3f}"
-                ex_date_display = dividend_data['ex_date']
+                    dividend_display = "No dividend"
+                    yield_display = "0%"
+                
+                # Track totals by currency
+                if currency not in total_value:
+                    total_value[currency] = 0
+                
+                if is_uk_stock and currency == 'GBP':
+                    total_value[currency] += position_value / 100  # Convert to pounds
+                else:
+                    total_value[currency] += position_value
+                
+                table_data.append({
+                    'Symbol': item['symbol'],
+                    'Company': stock_data['company_name'][:30],
+                    'Shares': f"{float(item['shares']):.1f}",
+                    'Price': price_display,
+                    'Value': value_display,
+                    'Dividend': dividend_display,
+                    'Yield': yield_display,
+                    'Ex-Date': stock_data['ex_date']
+                })
             else:
-                dividend_display = "N/A"
-                ex_date_display = "N/A"
+                table_data.append({
+                    'Symbol': item['symbol'],
+                    'Company': 'Data unavailable',
+                    'Shares': f"{float(item['shares']):.1f}",
+                    'Price': 'N/A',
+                    'Value': 'N/A',
+                    'Dividend': 'N/A',
+                    'Yield': 'N/A',
+                    'Ex-Date': 'N/A'
+                })
         
-            table_data.append({
-                'Symbol': item['symbol'],
-                'Shares': f"{float(item['shares']):.1f}",
-                'Current Price': price_display,
-                'Position Value': value_display,
-                'Dividend/Share': dividend_display,
-                'Ex-Date': ex_date_display
-            })
+        # Display table
+        if table_data:
+            df = pd.DataFrame(table_data)
+            st.dataframe(df, use_container_width=True)
+            
+            # Portfolio totals
+            st.subheader("Portfolio Total")
+            for currency, value in total_value.items():
+                if currency == 'GBP':
+                    st.write(f"GBP Holdings: £{value:.2f}")
+                elif currency == 'USD':
+                    st.write(f"USD Holdings: ${value:.2f}")
+                else:
+                    st.write(f"{currency} Holdings: {value:.2f}")
     
-    # Display table
-    import pandas as pd
-    df = pd.DataFrame(table_data)
-    st.dataframe(df, use_container_width=True)
-    
-    # Portfolio total
-    st.subheader("Portfolio Total")
-    total_usd = 0
-    total_gbp = 0
-    
-    for item in portfolio:
-        price_data = finnhub.get_stock_price(item['symbol'])
-        if price_data:
-            position_value = float(item['shares']) * price_data['price']
-            if price_data['currency'] == 'GBP':
-                total_gbp += position_value / 100
-            else:
-                total_usd += position_value
-    
-    if total_usd > 0:
-        st.write(f"USD Holdings: ${total_usd:.2f}")
-    if total_gbp > 0:
-        st.write(f"GBP Holdings: £{total_gbp:.2f}")
     else:
-        st.info("Add some stocks to your portfolio using the sidebar to get started!")
+        st.info("Add stocks to your portfolio using the sidebar to get started!")
 
 def main():
     """Main application entry point"""
-    # Initialize session state with persistence
+    # Initialize session state
     if 'authenticated' not in st.session_state:
         st.session_state.authenticated = False
-
-    # Check for remembered login
+    
+    # Check for session persistence
     if not st.session_state.authenticated:
-        # Try to restore session from URL parameters
         query_params = st.query_params
         if 'user' in query_params and 'session' in query_params:
-            # Simple session restoration
             username = query_params['user']
             user = db.get_user(username)
             if user:
