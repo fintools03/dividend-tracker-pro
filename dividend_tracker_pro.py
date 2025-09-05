@@ -273,49 +273,49 @@ def main_app():
     # Main content area
     portfolio = db.get_portfolio(st.session_state.user_id)
     
-if portfolio:
-    st.subheader("Portfolio with Current Prices and Dividends")
+    if portfolio:
+        st.subheader("Portfolio with Current Prices and Dividends")
     
-    finnhub = FinnhubClient()
+        finnhub = FinnhubClient()
     
-    # Create table data
-    table_data = []
-    for item in portfolio:
-        price_data = finnhub.get_stock_price(item['symbol'])
-        dividend_data = finnhub.get_dividend_info(item['symbol'])
+        # Create table data
+        table_data = []
+        for item in portfolio:
+            price_data = finnhub.get_stock_price(item['symbol'])
+            dividend_data = finnhub.get_dividend_info(item['symbol'])
         
-        if price_data:
-            if price_data['currency'] == 'GBP':
-                price_display = f"{price_data['price']:.1f}p"
-                position_value = float(item['shares']) * price_data['price']
-                value_display = f"£{position_value / 100:.2f}"
+            if price_data:
+                if price_data['currency'] == 'GBP':
+                    price_display = f"{price_data['price']:.1f}p"
+                    position_value = float(item['shares']) * price_data['price']
+                    value_display = f"£{position_value / 100:.2f}"
+                else:
+                    price_display = f"${price_data['price']:.2f}"
+                    position_value = float(item['shares']) * price_data['price']
+                    value_display = f"${position_value:.2f}"
             else:
-                price_display = f"${price_data['price']:.2f}"
-                position_value = float(item['shares']) * price_data['price']
-                value_display = f"${position_value:.2f}"
-        else:
-            price_display = "Not available"
-            value_display = "N/A"
+                price_display = "Not available"
+                value_display = "N/A"
         
-        # Format dividend info
-        if dividend_data:
-            if dividend_data['currency'] == 'GBP':
-                dividend_display = f"{dividend_data['dividend_per_share']:.1f}p"
+            # Format dividend info
+            if dividend_data:
+                if dividend_data['currency'] == 'GBP':
+                    dividend_display = f"{dividend_data['dividend_per_share']:.1f}p"
+                else:
+                    dividend_display = f"${dividend_data['dividend_per_share']:.3f}"
+                ex_date_display = dividend_data['ex_date']
             else:
-                dividend_display = f"${dividend_data['dividend_per_share']:.3f}"
-            ex_date_display = dividend_data['ex_date']
-        else:
-            dividend_display = "N/A"
-            ex_date_display = "N/A"
+                dividend_display = "N/A"
+                ex_date_display = "N/A"
         
-        table_data.append({
-            'Symbol': item['symbol'],
-            'Shares': f"{float(item['shares']):.1f}",
-            'Current Price': price_display,
-            'Position Value': value_display,
-            'Dividend/Share': dividend_display,
-            'Ex-Date': ex_date_display
-        })
+            table_data.append({
+                'Symbol': item['symbol'],
+                'Shares': f"{float(item['shares']):.1f}",
+                'Current Price': price_display,
+                'Position Value': value_display,
+                'Dividend/Share': dividend_display,
+                'Ex-Date': ex_date_display
+            })
     
     # Display table
     import pandas as pd
