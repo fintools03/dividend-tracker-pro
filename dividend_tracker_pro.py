@@ -35,6 +35,7 @@ class FinnhubClient:
             
             response = requests.get(url, params=params, timeout=10)
             data = response.json()
+            print(f"Price API - Symbol: {finnhub_symbol}, Response: {data}")
             
             print(f"Trying {finnhub_symbol} for original {symbol}")
             print(f"API response: {data}")
@@ -61,6 +62,7 @@ class FinnhubClient:
         
             response = requests.get(url, params=params, timeout=10)
             data = response.json()
+            print(f"Dividend API - Symbol: {finnhub_symbol}, Response: {data}")
         
             if data and len(data) > 0:
                 # Get the most recent dividend
@@ -263,7 +265,7 @@ def main_app():
                 with col1:
                     st.write(f"{item['symbol']}: {item['shares']}")
                 with col2:
-                    if st.button("Remove", key=f"remove_{item['symbol']}"):
+                    if st.button("❌", key=f"remove_{item['symbol']}"):
                         if db.remove_stock(st.session_state.user_id, item['symbol']):
                             st.success(f"Removed {item['symbol']}")
                             st.rerun()
