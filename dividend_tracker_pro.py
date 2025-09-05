@@ -5,6 +5,7 @@ from psycopg2.extras import RealDictCursor
 import bcrypt
 from decouple import config
 import requests
+import yfinance as yf
 
 # Page configuration
 st.set_page_config(
@@ -50,6 +51,51 @@ class FinnhubClient:
         except Exception as e:
             print(f"Finnhub error for {symbol}: {e}")
             return None
+
+    def get_yfinance_data(self, symbol):
+    """Get stock and dividend data from yfinance"""
+    try:
+        stock = yf.Ticker(symbol)
+        info = stock.info
+        
+        # Get current price
+        current_price = (
+            info.get('currentPrice') or 
+            info.get('regularMarketPrice') or 
+            info.get('previousClose') or 
+            0
+        )
+        
+        if current_price == 0:
+            return None, None
+        
+        # Get dividend data
+        try:
+            dividends = stock.dividends.tail(4)  # Last 4 payments
+            if not dividends.empty:
+                last_dividend = dividends.iloc[-1]
+                last_date = dividends.index[-1].strftime('%Y-%m-%d')
+                dividend_info = {
+                    'dividend_per_share': float(last_dividend),
+                    'ex_date': last_date,
+                    'currency': info.get('currency', 'USD')
+                }
+            else:
+                dividend_info = None
+        except:
+            dividend_info = None
+        
+        price_info = {
+            'symbol': symbol,
+            'price': current_price,
+            'currency': info.get('currency', 'USD')
+        }
+        
+        return price_info, dividend_info
+        
+    except Exception as e:
+        print(f"yfinance error for {symbol}: {e}")
+        return None, None
 
     def get_dividend_info(self, symbol):
         """Get dividend information from Finnhub"""
