@@ -388,8 +388,8 @@ def main_app():
         st.write(f"USD Holdings: ${total_usd:.2f}")
     if total_gbp > 0:
         st.write(f"GBP Holdings: £{total_gbp:.2f}")
-else:
-    st.info("Add some stocks to your portfolio using the sidebar to get started!")
+    else:
+        st.info("Add some stocks to your portfolio using the sidebar to get started!")
 
 def main():
     """Main application entry point"""
