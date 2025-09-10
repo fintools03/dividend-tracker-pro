@@ -115,22 +115,22 @@ class DatabaseManager:
 
 class YahooFinanceClient:
     def get_stock_data(self, symbol):
-    """Get stock price and dividend data from Yahoo Finance with debug output"""
-    try:
-        print(f"Debug - Fetching data for symbol: {symbol}")
-        stock = yf.Ticker(symbol)
-        info = stock.info
+        """Get stock price and dividend data from Yahoo Finance with debug output"""
+        try:
+            print(f"Debug - Fetching data for symbol: {symbol}")
+            stock = yf.Ticker(symbol)
+            info = stock.info
         
-        print(f"Debug - Stock info keys: {list(info.keys())[:10]}...")  # Show first 10 keys
-        print(f"Debug - Symbol in info: {info.get('symbol')}")
+            print(f"Debug - Stock info keys: {list(info.keys())[:10]}...")  # Show first 10 keys
+            print(f"Debug - Symbol in info: {info.get('symbol')}")
         
-        # Get current price
-        current_price = (
-            info.get('currentPrice') or 
-            info.get('regularMarketPrice') or 
-            info.get('previousClose') or 
-            0
-        )
+            # Get current price
+            current_price = (
+                info.get('currentPrice') or 
+                info.get('regularMarketPrice') or 
+                info.get('previousClose') or 
+                0
+            )
         
         print(f"Debug - Current price found: {current_price}")
         print(f"Debug - Currency: {info.get('currency')}")
