@@ -158,11 +158,11 @@ class YahooFinanceClient:
             print(f"Debug - Final result: {result}")
             return result
         
-    except Exception as e:
-        print(f"Debug - Yahoo Finance error for {symbol}: {e}")
-        import traceback
-        print(f"Debug - Full traceback: {traceback.format_exc()}")
-        return None
+        except Exception as e:
+            print(f"Debug - Yahoo Finance error for {symbol}: {e}")
+            import traceback
+            print(f"Debug - Full traceback: {traceback.format_exc()}")
+            return None
             
             # Get dividend data
             dividend_info = self._get_dividend_data(stock, info)
