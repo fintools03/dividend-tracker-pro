@@ -30,9 +30,9 @@ class DatabaseManager:
             else:
                 st.error("No database connection")
                 st.stop()
-        except Exception as e:
-            st.error(f"Database error: {e}")
-            st.stop()
+            except Exception as e:
+                st.error(f"Database error: {e}")
+                st.stop()
     
     def get_user(self, username):
         """Get user by username (case insensitive)"""
