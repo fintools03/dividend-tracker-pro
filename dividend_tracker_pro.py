@@ -135,9 +135,9 @@ class YahooFinanceClient:
             print(f"Debug - Current price found: {current_price}")
             print(f"Debug - Currency: {info.get('currency')}")
         
-        if current_price == 0:
-            print(f"Debug - No price found for {symbol}")
-            return None
+            if current_price == 0:
+                print(f"Debug - No price found for {symbol}")
+                return None
         
         # Get dividend data
         print(f"Debug - About to fetch dividend data...")
