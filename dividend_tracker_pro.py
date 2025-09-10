@@ -132,8 +132,8 @@ class YahooFinanceClient:
                 0
             )
         
-        print(f"Debug - Current price found: {current_price}")
-        print(f"Debug - Currency: {info.get('currency')}")
+            print(f"Debug - Current price found: {current_price}")
+            print(f"Debug - Currency: {info.get('currency')}")
         
         if current_price == 0:
             print(f"Debug - No price found for {symbol}")
