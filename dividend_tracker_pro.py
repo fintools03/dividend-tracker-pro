@@ -139,24 +139,24 @@ class YahooFinanceClient:
                 print(f"Debug - No price found for {symbol}")
                 return None
         
-        # Get dividend data
-        print(f"Debug - About to fetch dividend data...")
-        dividend_info = self._get_dividend_data(stock, info)
-        print(f"Debug - Dividend info returned: {dividend_info}")
+            # Get dividend data
+            print(f"Debug - About to fetch dividend data...")
+            dividend_info = self._get_dividend_data(stock, info)
+            print(f"Debug - Dividend info returned: {dividend_info}")
         
-        result = {
-            'symbol': symbol,
-            'price': current_price,
-            'currency': info.get('currency', 'USD'),
-            'company_name': info.get('longName', info.get('shortName', symbol)),
-            'dividend_per_share': dividend_info['dividend_per_share'],
-            'ex_date': dividend_info['ex_date'],
-            'annual_dividend': dividend_info['annual_dividend'],
-            'dividend_yield': dividend_info['dividend_yield']
-        }
+            result = {
+                'symbol': symbol,
+                'price': current_price,
+                'currency': info.get('currency', 'USD'),
+                'company_name': info.get('longName', info.get('shortName', symbol)),
+                'dividend_per_share': dividend_info['dividend_per_share'],
+                'ex_date': dividend_info['ex_date'],
+                'annual_dividend': dividend_info['annual_dividend'],
+                'dividend_yield': dividend_info['dividend_yield']
+            }
         
-        print(f"Debug - Final result: {result}")
-        return result
+            print(f"Debug - Final result: {result}")
+            return result
         
     except Exception as e:
         print(f"Debug - Yahoo Finance error for {symbol}: {e}")
