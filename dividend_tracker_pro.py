@@ -115,21 +115,54 @@ class DatabaseManager:
 
 class YahooFinanceClient:
     def get_stock_data(self, symbol):
-        """Get stock price and dividend data from Yahoo Finance"""
-        try:
-            stock = yf.Ticker(symbol)
-            info = stock.info
-            
-            # Get current price
-            current_price = (
-                info.get('currentPrice') or 
-                info.get('regularMarketPrice') or 
-                info.get('previousClose') or 
-                0
-            )
-            
-            if current_price == 0:
-                return None
+    """Get stock price and dividend data from Yahoo Finance with debug output"""
+    try:
+        print(f"Debug - Fetching data for symbol: {symbol}")
+        stock = yf.Ticker(symbol)
+        info = stock.info
+        
+        print(f"Debug - Stock info keys: {list(info.keys())[:10]}...")  # Show first 10 keys
+        print(f"Debug - Symbol in info: {info.get('symbol')}")
+        
+        # Get current price
+        current_price = (
+            info.get('currentPrice') or 
+            info.get('regularMarketPrice') or 
+            info.get('previousClose') or 
+            0
+        )
+        
+        print(f"Debug - Current price found: {current_price}")
+        print(f"Debug - Currency: {info.get('currency')}")
+        
+        if current_price == 0:
+            print(f"Debug - No price found for {symbol}")
+            return None
+        
+        # Get dividend data
+        print(f"Debug - About to fetch dividend data...")
+        dividend_info = self._get_dividend_data(stock, info)
+        print(f"Debug - Dividend info returned: {dividend_info}")
+        
+        result = {
+            'symbol': symbol,
+            'price': current_price,
+            'currency': info.get('currency', 'USD'),
+            'company_name': info.get('longName', info.get('shortName', symbol)),
+            'dividend_per_share': dividend_info['dividend_per_share'],
+            'ex_date': dividend_info['ex_date'],
+            'annual_dividend': dividend_info['annual_dividend'],
+            'dividend_yield': dividend_info['dividend_yield']
+        }
+        
+        print(f"Debug - Final result: {result}")
+        return result
+        
+    except Exception as e:
+        print(f"Debug - Yahoo Finance error for {symbol}: {e}")
+        import traceback
+        print(f"Debug - Full traceback: {traceback.format_exc()}")
+        return None
             
             # Get dividend data
             dividend_info = self._get_dividend_data(stock, info)
