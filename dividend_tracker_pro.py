@@ -182,53 +182,80 @@ class YahooFinanceClient:
             print(f"Yahoo Finance error for {symbol}: {e}")
             return None
     
-    def _get_dividend_data(self, stock, info):
-        """Extract dividend information"""
-        try:
-            # Get dividend history
-            dividends = stock.dividends.tail(8)
+   def _get_dividend_data(self, stock, info):
+    """Extract dividend information with debug output"""
+    try:
+        # Debug: Print what we're working with
+        print(f"Debug - Processing dividend data for stock info: {info.get('symbol', 'unknown')}")
+        
+        # Get dividend history
+        dividends = stock.dividends
+        print(f"Debug - Raw dividends data: {dividends}")
+        print(f"Debug - Dividends empty?: {dividends.empty}")
+        print(f"Debug - Dividends length: {len(dividends)}")
+        
+        if not dividends.empty:
+            # Get last 8 dividends
+            recent_dividends_data = dividends.tail(8)
+            print(f"Debug - Recent dividends: {recent_dividends_data}")
             
-            if not dividends.empty:
-                # Last dividend payment
-                last_dividend = float(dividends.iloc[-1])
-                last_date = dividends.index[-1].strftime('%Y-%m-%d')
-                
-                # Calculate annual dividend (last 12 months)
-                one_year_ago = datetime.now() - pd.DateOffset(days=365)
-                recent_dividends = dividends[dividends.index > one_year_ago]
-                annual_dividend = float(recent_dividends.sum()) if not recent_dividends.empty else last_dividend * 4
-                
-                # Calculate yield
-                current_price = (
-                    info.get('currentPrice') or 
-                    info.get('regularMarketPrice') or 
-                    info.get('previousClose') or 
-                    0
-                )
-                
-                dividend_yield = (annual_dividend / current_price * 100) if current_price > 0 else 0
-                
-                return {
-                    'dividend_per_share': last_dividend,
-                    'ex_date': last_date,
-                    'annual_dividend': annual_dividend,
-                    'dividend_yield': dividend_yield
-                }
-            else:
-                return {
-                    'dividend_per_share': 0,
-                    'ex_date': 'N/A',
-                    'annual_dividend': 0,
-                    'dividend_yield': 0
-                }
-                
-        except Exception:
+            # Last dividend payment
+            last_dividend = float(recent_dividends_data.iloc[-1])
+            last_date = recent_dividends_data.index[-1].strftime('%Y-%m-%d')
+            
+            print(f"Debug - Last dividend: {last_dividend}")
+            print(f"Debug - Last date: {last_date}")
+            
+            # Calculate annual dividend (last 12 months)
+            one_year_ago = datetime.now() - pd.DateOffset(days=365)
+            print(f"Debug - One year ago: {one_year_ago}")
+            
+            recent_dividends = dividends[dividends.index > one_year_ago]
+            print(f"Debug - Recent dividends (12 months): {recent_dividends}")
+            
+            annual_dividend = float(recent_dividends.sum()) if not recent_dividends.empty else last_dividend * 4
+            print(f"Debug - Annual dividend: {annual_dividend}")
+            
+            # Calculate yield
+            current_price = (
+                info.get('currentPrice') or 
+                info.get('regularMarketPrice') or 
+                info.get('previousClose') or 
+                0
+            )
+            
+            print(f"Debug - Current price for yield calc: {current_price}")
+            
+            dividend_yield = (annual_dividend / current_price * 100) if current_price > 0 else 0
+            print(f"Debug - Dividend yield: {dividend_yield}")
+            
+            return {
+                'dividend_per_share': last_dividend,
+                'ex_date': last_date,
+                'annual_dividend': annual_dividend,
+                'dividend_yield': dividend_yield
+            }
+        else:
+            print("Debug - No dividends found in history")
             return {
                 'dividend_per_share': 0,
                 'ex_date': 'N/A',
                 'annual_dividend': 0,
                 'dividend_yield': 0
             }
+            
+    except Exception as e:
+        print(f"Debug - Exception in _get_dividend_data: {e}")
+        print(f"Debug - Exception type: {type(e)}")
+        import traceback
+        print(f"Debug - Full traceback: {traceback.format_exc()}")
+        
+        return {
+            'dividend_per_share': 0,
+            'ex_date': 'N/A',
+            'annual_dividend': 0,
+            'dividend_yield': 0
+        }
 
 # Initialize database
 @st.cache_resource
