@@ -183,46 +183,46 @@ class YahooFinanceClient:
             return None
     
    def _get_dividend_data(self, stock, info):
-    """Extract dividend information with debug output"""
-    try:
-        # Debug: Print what we're working with
-        print(f"Debug - Processing dividend data for stock info: {info.get('symbol', 'unknown')}")
+        """Extract dividend information with debug output"""
+        try:
+            # Debug: Print what we're working with
+            print(f"Debug - Processing dividend data for stock info: {info.get('symbol', 'unknown')}")
         
-        # Get dividend history
-        dividends = stock.dividends
-        print(f"Debug - Raw dividends data: {dividends}")
-        print(f"Debug - Dividends empty?: {dividends.empty}")
-        print(f"Debug - Dividends length: {len(dividends)}")
+            # Get dividend history
+            dividends = stock.dividends
+            print(f"Debug - Raw dividends data: {dividends}")
+            print(f"Debug - Dividends empty?: {dividends.empty}")
+            print(f"Debug - Dividends length: {len(dividends)}")
         
-        if not dividends.empty:
-            # Get last 8 dividends
-            recent_dividends_data = dividends.tail(8)
-            print(f"Debug - Recent dividends: {recent_dividends_data}")
+            if not dividends.empty:
+                # Get last 8 dividends
+                recent_dividends_data = dividends.tail(8)
+                print(f"Debug - Recent dividends: {recent_dividends_data}")
             
-            # Last dividend payment
-            last_dividend = float(recent_dividends_data.iloc[-1])
-            last_date = recent_dividends_data.index[-1].strftime('%Y-%m-%d')
+                # Last dividend payment
+                last_dividend = float(recent_dividends_data.iloc[-1])
+                last_date = recent_dividends_data.index[-1].strftime('%Y-%m-%d')
             
-            print(f"Debug - Last dividend: {last_dividend}")
-            print(f"Debug - Last date: {last_date}")
+                print(f"Debug - Last dividend: {last_dividend}")
+                print(f"Debug - Last date: {last_date}")
             
-            # Calculate annual dividend (last 12 months)
-            one_year_ago = datetime.now() - pd.DateOffset(days=365)
-            print(f"Debug - One year ago: {one_year_ago}")
+                # Calculate annual dividend (last 12 months)
+                one_year_ago = datetime.now() - pd.DateOffset(days=365)
+                print(f"Debug - One year ago: {one_year_ago}")
             
-            recent_dividends = dividends[dividends.index > one_year_ago]
-            print(f"Debug - Recent dividends (12 months): {recent_dividends}")
+                recent_dividends = dividends[dividends.index > one_year_ago]
+                print(f"Debug - Recent dividends (12 months): {recent_dividends}")
             
-            annual_dividend = float(recent_dividends.sum()) if not recent_dividends.empty else last_dividend * 4
-            print(f"Debug - Annual dividend: {annual_dividend}")
+                annual_dividend = float(recent_dividends.sum()) if not recent_dividends.empty else last_dividend * 4
+                print(f"Debug - Annual dividend: {annual_dividend}")
             
-            # Calculate yield
-            current_price = (
-                info.get('currentPrice') or 
-                info.get('regularMarketPrice') or 
-                info.get('previousClose') or 
-                0
-            )
+                # Calculate yield
+                current_price = (
+                    info.get('currentPrice') or 
+                    info.get('regularMarketPrice') or 
+                    info.get('previousClose') or 
+                    0
+                )
             
             print(f"Debug - Current price for yield calc: {current_price}")
             
