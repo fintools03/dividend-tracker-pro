@@ -394,7 +394,7 @@ def main_app():
                     total_value[currency] = 0
                 
                 if is_uk_stock and currency == 'GBP':
-                    total_value[currency] += position_value / 100  # Convert to pounds
+                    total_value[currency] += position_value  # Already in pounds
                 else:
                     total_value[currency] += position_value
                 
