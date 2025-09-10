@@ -1,4 +1,4 @@
-# dividend_tracker.py - Clean Version with Yahoo Finance
+# dividend_tracker.py - Clean Version with Yahoo Finance and Debug Output
 import streamlit as st
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -120,10 +120,10 @@ class YahooFinanceClient:
             print(f"Debug - Fetching data for symbol: {symbol}")
             stock = yf.Ticker(symbol)
             info = stock.info
-        
+            
             print(f"Debug - Stock info keys: {list(info.keys())[:10]}...")  # Show first 10 keys
             print(f"Debug - Symbol in info: {info.get('symbol')}")
-        
+            
             # Get current price
             current_price = (
                 info.get('currentPrice') or 
@@ -131,19 +131,19 @@ class YahooFinanceClient:
                 info.get('previousClose') or 
                 0
             )
-        
+            
             print(f"Debug - Current price found: {current_price}")
             print(f"Debug - Currency: {info.get('currency')}")
-        
+            
             if current_price == 0:
                 print(f"Debug - No price found for {symbol}")
                 return None
-        
+            
             # Get dividend data
             print(f"Debug - About to fetch dividend data...")
             dividend_info = self._get_dividend_data(stock, info)
             print(f"Debug - Dividend info returned: {dividend_info}")
-        
+            
             result = {
                 'symbol': symbol,
                 'price': current_price,
@@ -154,108 +154,90 @@ class YahooFinanceClient:
                 'annual_dividend': dividend_info['annual_dividend'],
                 'dividend_yield': dividend_info['dividend_yield']
             }
-        
+            
             print(f"Debug - Final result: {result}")
             return result
-        
+            
         except Exception as e:
             print(f"Debug - Yahoo Finance error for {symbol}: {e}")
             import traceback
             print(f"Debug - Full traceback: {traceback.format_exc()}")
             return None
-            
-            # Get dividend data
-            dividend_info = self._get_dividend_data(stock, info)
-            
-            return {
-                'symbol': symbol,
-                'price': current_price,
-                'currency': info.get('currency', 'USD'),
-                'company_name': info.get('longName', info.get('shortName', symbol)),
-                'dividend_per_share': dividend_info['dividend_per_share'],
-                'ex_date': dividend_info['ex_date'],
-                'annual_dividend': dividend_info['annual_dividend'],
-                'dividend_yield': dividend_info['dividend_yield']
-            }
-            
-        except Exception as e:
-            print(f"Yahoo Finance error for {symbol}: {e}")
-            return None
     
-       def _get_dividend_data(self, stock, info):
-            """Extract dividend information with debug output"""
-            try:
-                # Debug: Print what we're working with
-                print(f"Debug - Processing dividend data for stock info: {info.get('symbol', 'unknown')}")
-        
-                # Get dividend history
-                dividends = stock.dividends
-                print(f"Debug - Raw dividends data: {dividends}")
-                print(f"Debug - Dividends empty?: {dividends.empty}")
-                print(f"Debug - Dividends length: {len(dividends)}")
-        
-                if not dividends.empty:
-                    # Get last 8 dividends
-                    recent_dividends_data = dividends.tail(8)
-                    print(f"Debug - Recent dividends: {recent_dividends_data}")
+    def _get_dividend_data(self, stock, info):
+        """Extract dividend information with debug output"""
+        try:
+            # Debug: Print what we're working with
+            print(f"Debug - Processing dividend data for stock info: {info.get('symbol', 'unknown')}")
             
-                    # Last dividend payment
-                    last_dividend = float(recent_dividends_data.iloc[-1])
-                    last_date = recent_dividends_data.index[-1].strftime('%Y-%m-%d')
+            # Get dividend history
+            dividends = stock.dividends
+            print(f"Debug - Raw dividends data: {dividends}")
+            print(f"Debug - Dividends empty?: {dividends.empty}")
+            print(f"Debug - Dividends length: {len(dividends)}")
             
-                    print(f"Debug - Last dividend: {last_dividend}")
-                    print(f"Debug - Last date: {last_date}")
+            if not dividends.empty:
+                # Get last 8 dividends
+                recent_dividends_data = dividends.tail(8)
+                print(f"Debug - Recent dividends: {recent_dividends_data}")
+                
+                # Last dividend payment
+                last_dividend = float(recent_dividends_data.iloc[-1])
+                last_date = recent_dividends_data.index[-1].strftime('%Y-%m-%d')
+                
+                print(f"Debug - Last dividend: {last_dividend}")
+                print(f"Debug - Last date: {last_date}")
+                
+                # Calculate annual dividend (last 12 months)
+                one_year_ago = datetime.now() - pd.DateOffset(days=365)
+                print(f"Debug - One year ago: {one_year_ago}")
+                
+                recent_dividends = dividends[dividends.index > one_year_ago]
+                print(f"Debug - Recent dividends (12 months): {recent_dividends}")
+                
+                annual_dividend = float(recent_dividends.sum()) if not recent_dividends.empty else last_dividend * 4
+                print(f"Debug - Annual dividend: {annual_dividend}")
+                
+                # Calculate yield
+                current_price = (
+                    info.get('currentPrice') or 
+                    info.get('regularMarketPrice') or 
+                    info.get('previousClose') or 
+                    0
+                )
+                
+                print(f"Debug - Current price for yield calc: {current_price}")
+                
+                dividend_yield = (annual_dividend / current_price * 100) if current_price > 0 else 0
+                print(f"Debug - Dividend yield: {dividend_yield}")
+                
+                return {
+                    'dividend_per_share': last_dividend,
+                    'ex_date': last_date,
+                    'annual_dividend': annual_dividend,
+                    'dividend_yield': dividend_yield
+                }
+            else:
+                print("Debug - No dividends found in history")
+                return {
+                    'dividend_per_share': 0,
+                    'ex_date': 'N/A',
+                    'annual_dividend': 0,
+                    'dividend_yield': 0
+                }
+                
+        except Exception as e:
+            print(f"Debug - Exception in _get_dividend_data: {e}")
+            print(f"Debug - Exception type: {type(e)}")
+            import traceback
+            print(f"Debug - Full traceback: {traceback.format_exc()}")
             
-                    # Calculate annual dividend (last 12 months)
-                    one_year_ago = datetime.now() - pd.DateOffset(days=365)
-                    print(f"Debug - One year ago: {one_year_ago}")
-            
-                    recent_dividends = dividends[dividends.index > one_year_ago]
-                    print(f"Debug - Recent dividends (12 months): {recent_dividends}")
-            
-                    annual_dividend = float(recent_dividends.sum()) if not recent_dividends.empty else last_dividend * 4
-                    print(f"Debug - Annual dividend: {annual_dividend}")
-            
-                    # Calculate yield
-                    current_price = (
-                        info.get('currentPrice') or 
-                        info.get('regularMarketPrice') or 
-                        info.get('previousClose') or 
-                        0
-                    )
-            
-            print(f"Debug - Current price for yield calc: {current_price}")
-            
-            dividend_yield = (annual_dividend / current_price * 100) if current_price > 0 else 0
-            print(f"Debug - Dividend yield: {dividend_yield}")
-            
-            return {
-                'dividend_per_share': last_dividend,
-                'ex_date': last_date,
-                'annual_dividend': annual_dividend,
-                'dividend_yield': dividend_yield
-            }
-        else:
-            print("Debug - No dividends found in history")
             return {
                 'dividend_per_share': 0,
                 'ex_date': 'N/A',
                 'annual_dividend': 0,
                 'dividend_yield': 0
             }
-            
-    except Exception as e:
-        print(f"Debug - Exception in _get_dividend_data: {e}")
-        print(f"Debug - Exception type: {type(e)}")
-        import traceback
-        print(f"Debug - Full traceback: {traceback.format_exc()}")
-        
-        return {
-            'dividend_per_share': 0,
-            'ex_date': 'N/A',
-            'annual_dividend': 0,
-            'dividend_yield': 0
-        }
 
 # Initialize database
 @st.cache_resource
@@ -324,9 +306,14 @@ def main_app():
     st.title("Dividend Tracker")
     st.write(f"Welcome, {st.session_state.username}!")
     
-    # Logout button
+    # Logout button - Fixed to clear session properly
     if st.button("Logout"):
-        st.session_state.clear()
+        # Clear all session state
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        # Clear query params
+        st.query_params.clear()
+        st.success("Logged out successfully!")
         st.rerun()
     
     # Sidebar for portfolio management
