@@ -115,10 +115,12 @@ class DatabaseManager:
 
 class YahooFinanceClient:
     def get_stock_data(self, symbol):
-        """Get stock price and dividend data from Yahoo Finance with debug output"""
+        """Get stock price and dividend data from Yahoo Finance with browser headers"""
         try:
             print(f"Debug - Fetching data for symbol: {symbol}")
-            stock = yf.Ticker(symbol)
+            
+            # Create ticker with custom session to avoid blocking
+            stock = yf.Ticker(symbol, session=self.session)
             info = stock.info
             
             print(f"Debug - Stock info keys: {list(info.keys())[:10]}...")  # Show first 10 keys
