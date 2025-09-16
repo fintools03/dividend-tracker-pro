@@ -7,6 +7,8 @@ from decouple import config
 import yfinance as yf
 import pandas as pd
 from datetime import datetime
+import requests
+import json
 
 # Page configuration
 st.set_page_config(
@@ -114,6 +116,29 @@ class DatabaseManager:
             return False
 
 class YahooFinanceClient:
+    def __init__(self):
+        # Create a session with browser-like headers to avoid blocking
+        self.session = requests.Session()
+        
+        # Set headers to mimic a real browser
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        })
+        
+        # Add retry strategy for failed requests
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
     def get_stock_data(self, symbol):
         """Get stock price and dividend data from Yahoo Finance with browser headers"""
         try:
@@ -331,22 +356,34 @@ def main_app():
         st.subheader("Portfolio Analysis")
         
         yahoo_client = YahooFinanceClient()
+        alpha_client = AlphaVantageClient()
         table_data = []
         total_value = {}
         
         for item in portfolio:
-            stock_data = yahoo_client.get_stock_data(item['symbol'])
+            # Try Alpha Vantage first, fallback to Yahoo Finance
+            stock_data = alpha_client.get_stock_data(item['symbol'])
+            
+            if not stock_data:
+                print(f"Alpha Vantage failed for {item['symbol']}, trying Yahoo Finance...")
+                stock_data = yahoo_client.get_stock_data(item['symbol'])
             
             if stock_data:
                 is_uk_stock = item['symbol'].endswith('.L')
                 currency = stock_data['currency']
                 
+                # Calculate dividend yield if not provided
+                if stock_data['dividend_yield'] == 0 and stock_data['annual_dividend'] > 0:
+                    stock_data['dividend_yield'] = (stock_data['annual_dividend'] / stock_data['price'] * 100)
+                
                 # Format price
                 if is_uk_stock and currency == 'GBP':
-                    price_display = format_currency(stock_data['price'], currency, True)
-                    # Calculate position value
-                    position_value = float(item['shares']) * stock_data['price']
-                    value_display = f"£{position_value / 100:.2f}"  # Convert pence to pounds
+                    # Convert pence to pounds for display
+                    price_in_pounds = stock_data['price'] / 100
+                    price_display = f"£{price_in_pounds:.2f}"
+                    # Calculate position value in pounds
+                    position_value = float(item['shares']) * price_in_pounds
+                    value_display = f"£{position_value:.2f}"
                 else:
                     price_display = format_currency(stock_data['price'], currency)
                     position_value = float(item['shares']) * stock_data['price']
@@ -355,7 +392,9 @@ def main_app():
                 # Format dividend
                 if stock_data['dividend_per_share'] > 0:
                     if is_uk_stock and currency == 'GBP':
-                        dividend_display = f"{stock_data['dividend_per_share']:.1f}p"
+                        # Convert dividend from pence to pounds
+                        dividend_in_pounds = stock_data['dividend_per_share'] / 100
+                        dividend_display = f"£{dividend_in_pounds:.3f}"
                     else:
                         dividend_display = format_currency(stock_data['dividend_per_share'], currency)
                     
