@@ -166,17 +166,14 @@ class AlpacaClient:
             return None
     
     def _get_latest_bar(self, symbol):
-        """Get latest price bar for a symbol with detailed debugging"""
+        """Get latest price bar for a symbol with correct API endpoint"""
         try:
-            # Get latest trading day's data
-            end_date = date.today().strftime('%Y-%m-%d')
-            start_date = (date.today() - pd.DateOffset(days=7)).strftime('%Y-%m-%d')
-            
-            url = f"{self.base_url}/v2/stocks/{symbol}/bars"
+            # Correct Alpaca API endpoint for historical data
+            url = f"{self.base_url}/v2/stocks/bars"
             params = {
-                'start': start_date,
-                'end': end_date,
+                'symbols': symbol,  # Note: symbols (plural) not symbol
                 'timeframe': '1Day',
+                'start': (date.today() - pd.DateOffset(days=5)).strftime('%Y-%m-%d'),
                 'limit': 1,
                 'sort': 'desc'
             }
@@ -187,7 +184,6 @@ class AlpacaClient:
             
             response = requests.get(url, headers=self.headers, params=params)
             print(f"Debug - Response status: {response.status_code}")
-            print(f"Debug - Response headers: {dict(response.headers)}")
             print(f"Debug - Response text: '{response.text}'")
             
             if response.status_code != 200:
@@ -201,8 +197,9 @@ class AlpacaClient:
             data = response.json()
             print(f"Debug - Parsed JSON: {data}")
             
-            if 'bars' in data and data['bars']:
-                latest_bar = data['bars'][0]
+            # Alpaca returns data with symbol as key
+            if 'bars' in data and symbol in data['bars'] and data['bars'][symbol]:
+                latest_bar = data['bars'][symbol][0]  # Get first (most recent) bar
                 result = {
                     'close': float(latest_bar['c']),
                     'open': float(latest_bar['o']),
@@ -213,7 +210,7 @@ class AlpacaClient:
                 print(f"Debug - Returning price data: {result}")
                 return result
             else:
-                print(f"Debug - No bars data found in response")
+                print(f"Debug - No bars data found for {symbol} in response")
             
             return None
             
