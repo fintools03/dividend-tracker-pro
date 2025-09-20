@@ -166,7 +166,7 @@ class AlpacaClient:
             return None
     
     def _get_latest_bar(self, symbol):
-        """Get latest price bar for a symbol"""
+        """Get latest price bar for a symbol with detailed debugging"""
         try:
             # Get latest trading day's data
             end_date = date.today().strftime('%Y-%m-%d')
@@ -181,23 +181,46 @@ class AlpacaClient:
                 'sort': 'desc'
             }
             
+            print(f"Debug - Alpaca price request: {url}")
+            print(f"Debug - Headers: {self.headers}")
+            print(f"Debug - Params: {params}")
+            
             response = requests.get(url, headers=self.headers, params=params)
+            print(f"Debug - Response status: {response.status_code}")
+            print(f"Debug - Response headers: {dict(response.headers)}")
+            print(f"Debug - Response text: '{response.text}'")
+            
+            if response.status_code != 200:
+                print(f"Debug - HTTP Error {response.status_code}: {response.text}")
+                return None
+            
+            if not response.text.strip():
+                print(f"Debug - Empty response body for {symbol}")
+                return None
+            
             data = response.json()
+            print(f"Debug - Parsed JSON: {data}")
             
             if 'bars' in data and data['bars']:
                 latest_bar = data['bars'][0]
-                return {
+                result = {
                     'close': float(latest_bar['c']),
                     'open': float(latest_bar['o']),
                     'high': float(latest_bar['h']),
                     'low': float(latest_bar['l']),
                     'volume': int(latest_bar['v'])
                 }
+                print(f"Debug - Returning price data: {result}")
+                return result
+            else:
+                print(f"Debug - No bars data found in response")
             
             return None
             
         except Exception as e:
             print(f"Error getting price for {symbol}: {e}")
+            import traceback
+            print(f"Debug - Full traceback: {traceback.format_exc()}")
             return None
     
     def _get_dividend_data(self, symbol):
