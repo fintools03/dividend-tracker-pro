@@ -196,7 +196,7 @@ class AlpacaClient:
             return None
     
     def _get_dividend_data(self, symbol):
-        """Get dividend information using Corporate Actions API"""
+        """Get dividend information using Corporate Actions API with debug output"""
         try:
             # Get dividend announcements for the last 2 years
             end_date = date.today().strftime('%Y-%m-%d')
@@ -211,12 +211,21 @@ class AlpacaClient:
                 'sort': 'desc'
             }
             
+            print(f"Debug - Alpaca dividend request for {symbol}: {url}")
+            print(f"Debug - Params: {params}")
+            
             response = requests.get(url, headers=self.headers, params=params)
+            print(f"Debug - Response status: {response.status_code}")
+            print(f"Debug - Response text: {response.text[:500]}...")
+            
             data = response.json()
             
             if 'corporate_actions' in data and data['corporate_actions']:
+                print(f"Debug - Found {len(data['corporate_actions'])} dividends for {symbol}")
+                
                 # Get the most recent dividend
                 recent_dividend = data['corporate_actions'][0]
+                print(f"Debug - Recent dividend: {recent_dividend}")
                 
                 # Calculate annual dividend from recent payments
                 annual_dividend = 0
@@ -239,12 +248,16 @@ class AlpacaClient:
                 
                 dividend_yield = (annual_dividend / current_price * 100) if current_price > 0 else 0
                 
-                return {
+                result = {
                     'last_dividend': float(recent_dividend['rate']),
                     'last_ex_date': recent_dividend['ex_date'],
                     'annual_dividend': annual_dividend,
                     'dividend_yield': dividend_yield
                 }
+                print(f"Debug - Dividend result for {symbol}: {result}")
+                return result
+            else:
+                print(f"Debug - No dividend data found for {symbol}")
             
             return {
                 'last_dividend': 0,
@@ -255,6 +268,8 @@ class AlpacaClient:
             
         except Exception as e:
             print(f"Error getting dividend data for {symbol}: {e}")
+            import traceback
+            print(f"Debug - Full traceback: {traceback.format_exc()}")
             return {
                 'last_dividend': 0,
                 'last_ex_date': 'N/A',
@@ -488,7 +503,7 @@ def main_app():
                 if stock_data['dividend_yield'] == 0 and stock_data['annual_dividend'] > 0:
                     stock_data['dividend_yield'] = (stock_data['annual_dividend'] / stock_data['price'] * 100)
                 
-                # Format price
+                # Format price and value for UK stocks
                 if is_uk_stock and currency == 'GBP':
                     # Convert pence to pounds for display
                     price_in_pounds = stock_data['price'] / 100
@@ -496,10 +511,13 @@ def main_app():
                     # Calculate position value in pounds
                     position_value = float(item['shares']) * price_in_pounds
                     value_display = f"£{position_value:.2f}"
+                    # Store actual pounds value for totals
+                    portfolio_value = position_value
                 else:
                     price_display = format_currency(stock_data['price'], currency)
                     position_value = float(item['shares']) * stock_data['price']
                     value_display = format_currency(position_value, currency)
+                    portfolio_value = position_value
                 
                 # Format dividend
                 if stock_data['dividend_per_share'] > 0:
@@ -515,14 +533,11 @@ def main_app():
                     dividend_display = "No dividend"
                     yield_display = "0%"
                 
-                # Track totals by currency
+                # Track totals by currency (use portfolio_value which is already in correct units)
                 if currency not in total_value:
                     total_value[currency] = 0
                 
-                if is_uk_stock and currency == 'GBP':
-                    total_value[currency] += position_value  # Already in pounds
-                else:
-                    total_value[currency] += position_value
+                total_value[currency] += portfolio_value
                 
                 table_data.append({
                     'Symbol': item['symbol'],
