@@ -120,7 +120,7 @@ class AlpacaClient:
     def __init__(self):
         self.api_key = "AKKVAAHKSVNYSVCNE142"
         self.secret = "zQTRsdv31D8iegqoR49LOwrXnUxRFWotl4bdJ7cQ"
-        self.base_url = "https://api.alpaca.markets"
+        self.base_url = "https://data.alpaca.markets"  # Changed to data subdomain
         self.headers = self._get_headers()
     
     def _get_headers(self):
@@ -166,16 +166,14 @@ class AlpacaClient:
             return None
     
     def _get_latest_bar(self, symbol):
-        """Get latest price bar for a symbol with correct API endpoint"""
+        """Get latest price bar using the correct Alpaca market data endpoint"""
         try:
-            # Correct Alpaca API endpoint for historical data
-            url = f"{self.base_url}/v2/stocks/bars"
+            # Use the historical data endpoint format from Alpaca docs
+            url = f"{self.base_url}/v1beta1/stocks/{symbol}/bars"
             params = {
-                'symbols': symbol,  # Note: symbols (plural) not symbol
                 'timeframe': '1Day',
                 'start': (date.today() - pd.DateOffset(days=5)).strftime('%Y-%m-%d'),
-                'limit': 1,
-                'sort': 'desc'
+                'limit': 1
             }
             
             print(f"Debug - Alpaca price request: {url}")
@@ -184,22 +182,18 @@ class AlpacaClient:
             
             response = requests.get(url, headers=self.headers, params=params)
             print(f"Debug - Response status: {response.status_code}")
-            print(f"Debug - Response text: '{response.text}'")
+            print(f"Debug - Response text: '{response.text[:200]}...'")
             
             if response.status_code != 200:
                 print(f"Debug - HTTP Error {response.status_code}: {response.text}")
                 return None
             
-            if not response.text.strip():
-                print(f"Debug - Empty response body for {symbol}")
-                return None
-            
             data = response.json()
-            print(f"Debug - Parsed JSON: {data}")
+            print(f"Debug - Response keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
             
-            # Alpaca returns data with symbol as key
-            if 'bars' in data and symbol in data['bars'] and data['bars'][symbol]:
-                latest_bar = data['bars'][symbol][0]  # Get first (most recent) bar
+            # Check different possible response formats
+            if 'bars' in data and data['bars']:
+                latest_bar = data['bars'][-1]  # Get last bar
                 result = {
                     'close': float(latest_bar['c']),
                     'open': float(latest_bar['o']),
@@ -209,9 +203,8 @@ class AlpacaClient:
                 }
                 print(f"Debug - Returning price data: {result}")
                 return result
-            else:
-                print(f"Debug - No bars data found for {symbol} in response")
             
+            print(f"Debug - No bars data found in response structure")
             return None
             
         except Exception as e:
@@ -513,8 +506,7 @@ def main_app():
         total_value = {}
         
         for item in portfolio:
-            # For US stocks, try Alpaca first, then Yahoo Finance fallback
-            # For UK stocks (.L), go directly to Yahoo Finance
+            # Test Alpaca API with fixed endpoint, fallback to Yahoo Finance
             if item['symbol'].endswith('.L'):
                 print(f"UK stock {item['symbol']} - using Yahoo Finance directly")
                 stock_data = yahoo_client.get_stock_data(item['symbol'])
