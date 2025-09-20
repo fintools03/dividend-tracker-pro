@@ -134,6 +134,11 @@ class AlpacaClient:
     def get_stock_data(self, symbol):
         """Get stock price and dividend data from Alpaca API"""
         try:
+            # Skip UK stocks (.L suffix) as Alpaca only covers US markets
+            if symbol.endswith('.L'):
+                print(f"Skipping {symbol} - Alpaca only supports US markets")
+                return None
+            
             # Get current stock price
             price_data = self._get_latest_bar(symbol)
             if not price_data:
@@ -488,12 +493,18 @@ def main_app():
         total_value = {}
         
         for item in portfolio:
-            # Try Alpaca first, fallback to Yahoo Finance
-            stock_data = alpaca_client.get_stock_data(item['symbol'])
-            
-            if not stock_data:
-                print(f"Alpaca failed for {item['symbol']}, trying Yahoo Finance...")
+            # For US stocks, try Alpaca first, then Yahoo Finance fallback
+            # For UK stocks (.L), go directly to Yahoo Finance
+            if item['symbol'].endswith('.L'):
+                print(f"UK stock {item['symbol']} - using Yahoo Finance directly")
                 stock_data = yahoo_client.get_stock_data(item['symbol'])
+            else:
+                print(f"US stock {item['symbol']} - trying Alpaca first")
+                stock_data = alpaca_client.get_stock_data(item['symbol'])
+                
+                if not stock_data:
+                    print(f"Alpaca failed for {item['symbol']}, trying Yahoo Finance...")
+                    stock_data = yahoo_client.get_stock_data(item['symbol'])
             
             if stock_data:
                 is_uk_stock = item['symbol'].endswith('.L')
@@ -564,7 +575,7 @@ def main_app():
         # Display table
         if table_data:
             df = pd.DataFrame(table_data)
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(df, width='stretch')
             
             # Portfolio totals
             st.subheader("Portfolio Total")
