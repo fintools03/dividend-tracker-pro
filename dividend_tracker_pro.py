@@ -1,4 +1,4 @@
-# dividend_tracker.py - Complete Version with Alpha Vantage Integration
+# dividend_tracker.py - Complete Version with Alpaca API Integration
 import streamlit as st
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -6,9 +6,10 @@ import bcrypt
 from decouple import config
 import yfinance as yf
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
 import requests
 import json
+from base64 import b64encode
 
 # Page configuration
 st.set_page_config(
@@ -115,141 +116,155 @@ class DatabaseManager:
             st.error(f"Error removing stock: {e}")
             return False
 
-class AlphaVantageClient:
+class AlpacaClient:
     def __init__(self):
-        self.api_key = "0ZL6RBY7H5GO7IH9"
-        self.base_url = "https://www.alphavantage.co/query"
+        self.api_key = "AKKVAAHKSVNYSVCNE142"
+        self.secret = "zQTRsdv31D8iegqoR49LOwrXnUxRFWotl4bdJ7cQ"
+        self.base_url = "https://api.alpaca.markets"
+        self.headers = self._get_headers()
+    
+    def _get_headers(self):
+        """Create authentication headers for Alpaca API"""
+        return {
+            'APCA-API-KEY-ID': self.api_key,
+            'APCA-API-SECRET-KEY': self.secret,
+            'Content-Type': 'application/json'
+        }
     
     def get_stock_data(self, symbol):
-        """Get stock price and dividend data from Alpha Vantage using correct endpoints"""
+        """Get stock price and dividend data from Alpaca API"""
         try:
-            # Get current stock price using GLOBAL_QUOTE
-            quote_data = self._get_global_quote(symbol)
-            if not quote_data:
+            # Get current stock price
+            price_data = self._get_latest_bar(symbol)
+            if not price_data:
                 return None
             
-            # Get dividend information from OVERVIEW
-            overview_data = self._get_overview(symbol)
+            # Get dividend information
+            dividend_data = self._get_dividend_data(symbol)
             
-            # Get recent dividend history from TIME_SERIES_WEEKLY_ADJUSTED
-            dividend_history = self._get_recent_dividends(symbol)
-            
-            # Combine all data
+            # Combine the data
             result = {
                 'symbol': symbol,
-                'price': quote_data['price'],
-                'currency': 'USD',  # Alpha Vantage primarily USD
-                'company_name': overview_data.get('Name', symbol),
-                'dividend_per_share': dividend_history['last_dividend'],
-                'ex_date': dividend_history['last_ex_date'],
-                'annual_dividend': overview_data.get('dividend_per_share', 0),
-                'dividend_yield': overview_data.get('dividend_yield', 0)
+                'price': price_data['close'],
+                'currency': 'USD',  # Alpaca is primarily USD
+                'company_name': symbol,  # We'll use symbol for now
+                'dividend_per_share': dividend_data['last_dividend'],
+                'ex_date': dividend_data['last_ex_date'],
+                'annual_dividend': dividend_data['annual_dividend'],
+                'dividend_yield': dividend_data['dividend_yield']
             }
             
             return result
             
         except Exception as e:
-            print(f"Alpha Vantage error for {symbol}: {e}")
+            print(f"Alpaca error for {symbol}: {e}")
             return None
     
-    def _get_global_quote(self, symbol):
-        """Get current stock price using GLOBAL_QUOTE endpoint"""
+    def _get_latest_bar(self, symbol):
+        """Get latest price bar for a symbol"""
         try:
+            # Get latest trading day's data
+            end_date = date.today().strftime('%Y-%m-%d')
+            start_date = (date.today() - pd.DateOffset(days=7)).strftime('%Y-%m-%d')
+            
+            url = f"{self.base_url}/v2/stocks/{symbol}/bars"
             params = {
-                'function': 'GLOBAL_QUOTE',
-                'symbol': symbol,
-                'apikey': self.api_key
+                'start': start_date,
+                'end': end_date,
+                'timeframe': '1Day',
+                'limit': 1,
+                'sort': 'desc'
             }
             
-            response = requests.get(self.base_url, params=params)
+            response = requests.get(url, headers=self.headers, params=params)
             data = response.json()
             
-            # Check for rate limit message
-            if 'Note' in data and 'rate limit' in str(data.get('Note', '')).lower():
-                print(f"ALPHA VANTAGE RATE LIMITED for {symbol}")
-                return None
+            if 'bars' in data and data['bars']:
+                latest_bar = data['bars'][0]
+                return {
+                    'close': float(latest_bar['c']),
+                    'open': float(latest_bar['o']),
+                    'high': float(latest_bar['h']),
+                    'low': float(latest_bar['l']),
+                    'volume': int(latest_bar['v'])
+                }
             
-            if 'Global Quote' in data:
-                quote = data['Global Quote']
-                price = float(quote.get('05. price', 0))
-                if price > 0:
-                    return {'price': price}
-            
-            print(f"Alpha Vantage quote response for {symbol}: {data}")
             return None
-                
+            
         except Exception as e:
-            print(f"Error getting quote for {symbol}: {e}")
+            print(f"Error getting price for {symbol}: {e}")
             return None
     
-    def _get_overview(self, symbol):
-        """Get company overview including dividend data"""
+    def _get_dividend_data(self, symbol):
+        """Get dividend information using Corporate Actions API"""
         try:
+            # Get dividend announcements for the last 2 years
+            end_date = date.today().strftime('%Y-%m-%d')
+            start_date = (date.today() - pd.DateOffset(years=2)).strftime('%Y-%m-%d')
+            
+            url = f"{self.base_url}/v2/corporate_actions/announcements"
             params = {
-                'function': 'OVERVIEW',
+                'ca_types': 'dividend',
+                'since': start_date,
+                'until': end_date,
                 'symbol': symbol,
-                'apikey': self.api_key
+                'sort': 'desc'
             }
             
-            response = requests.get(self.base_url, params=params)
+            response = requests.get(url, headers=self.headers, params=params)
             data = response.json()
             
-            if 'Symbol' in data:
-                # Extract dividend information
-                dividend_per_share = float(data.get('DividendPerShare', 0))
-                dividend_yield = float(data.get('DividendYield', 0)) * 100  # Convert to percentage
+            if 'corporate_actions' in data and data['corporate_actions']:
+                # Get the most recent dividend
+                recent_dividend = data['corporate_actions'][0]
+                
+                # Calculate annual dividend from recent payments
+                annual_dividend = 0
+                dividend_count = 0
+                one_year_ago = date.today() - pd.DateOffset(years=1)
+                
+                for dividend in data['corporate_actions']:
+                    ex_date = datetime.strptime(dividend['ex_date'], '%Y-%m-%d').date()
+                    if ex_date >= one_year_ago:
+                        annual_dividend += float(dividend['rate'])
+                        dividend_count += 1
+                
+                # If we don't have a full year, estimate
+                if dividend_count == 0 and recent_dividend:
+                    annual_dividend = float(recent_dividend['rate']) * 4  # Assume quarterly
+                
+                # Get current price for yield calculation
+                price_data = self._get_latest_bar(symbol)
+                current_price = price_data['close'] if price_data else 0
+                
+                dividend_yield = (annual_dividend / current_price * 100) if current_price > 0 else 0
                 
                 return {
-                    'Name': data.get('Name', symbol),
-                    'dividend_per_share': dividend_per_share,
+                    'last_dividend': float(recent_dividend['rate']),
+                    'last_ex_date': recent_dividend['ex_date'],
+                    'annual_dividend': annual_dividend,
                     'dividend_yield': dividend_yield
                 }
             
-            return {}
-            
-        except Exception as e:
-            print(f"Error getting overview for {symbol}: {e}")
-            return {}
-    
-    def _get_recent_dividends(self, symbol):
-        """Get recent dividend payments from weekly adjusted data"""
-        try:
-            params = {
-                'function': 'TIME_SERIES_WEEKLY_ADJUSTED',
-                'symbol': symbol,
-                'apikey': self.api_key
-            }
-            
-            response = requests.get(self.base_url, params=params)
-            data = response.json()
-            
-            if 'Weekly Adjusted Time Series' in data:
-                time_series = data['Weekly Adjusted Time Series']
-                
-                # Look for recent dividend payments
-                for date, values in sorted(time_series.items(), reverse=True):
-                    dividend = float(values.get('7. dividend amount', 0))
-                    if dividend > 0:
-                        return {
-                            'last_dividend': dividend,
-                            'last_ex_date': date
-                        }
-            
             return {
                 'last_dividend': 0,
-                'last_ex_date': 'N/A'
+                'last_ex_date': 'N/A',
+                'annual_dividend': 0,
+                'dividend_yield': 0
             }
             
         except Exception as e:
-            print(f"Error getting dividend history for {symbol}: {e}")
+            print(f"Error getting dividend data for {symbol}: {e}")
             return {
                 'last_dividend': 0,
-                'last_ex_date': 'N/A'
+                'last_ex_date': 'N/A',
+                'annual_dividend': 0,
+                'dividend_yield': 0
             }
 
 class YahooFinanceClient:
     def get_stock_data(self, symbol):
-        """Fallback to Yahoo Finance if Alpha Vantage fails"""
+        """Fallback to Yahoo Finance if Alpaca fails"""
         try:
             stock = yf.Ticker(symbol)
             
@@ -420,7 +435,7 @@ def main_app():
         # Add stock form
         with st.form("add_stock"):
             st.subheader("Add Stock")
-            symbol = st.text_input("Symbol (e.g., AAPL, RIO.L)").upper().strip()
+            symbol = st.text_input("Symbol (e.g., AAPL, MSFT)").upper().strip()
             shares = st.number_input("Shares", min_value=0.1, value=1.0, step=0.1)
             add_button = st.form_submit_button("Add Stock")
             
@@ -452,18 +467,18 @@ def main_app():
     if portfolio:
         st.subheader("Portfolio Analysis")
         
+        alpaca_client = AlpacaClient()
         yahoo_client = YahooFinanceClient()
-        alpha_client = AlphaVantageClient()
         table_data = []
         total_value = {}
         
         for item in portfolio:
-            # Try Yahoo Finance first to avoid rate limits, fallback to Alpha Vantage
-            stock_data = yahoo_client.get_stock_data(item['symbol'])
+            # Try Alpaca first, fallback to Yahoo Finance
+            stock_data = alpaca_client.get_stock_data(item['symbol'])
             
             if not stock_data:
-                print(f"Yahoo Finance failed for {item['symbol']}, trying Alpha Vantage...")
-                stock_data = alpha_client.get_stock_data(item['symbol'])
+                print(f"Alpaca failed for {item['symbol']}, trying Yahoo Finance...")
+                stock_data = yahoo_client.get_stock_data(item['symbol'])
             
             if stock_data:
                 is_uk_stock = item['symbol'].endswith('.L')
